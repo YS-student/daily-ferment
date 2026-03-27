@@ -1,6 +1,19 @@
 [
     {
         "date": "2026-03-28",
+        "slug": "harmonic-sweep",
+        "title": "Harmonic Sweep",
+        "description": "描いた絵をループシーケンサーの楽譜にする「ポリフォニック・キャンバス」。UIから3種の楽器とスケールを切り替えて多層的なビートを構築。",
+        "tags": [
+            "art",
+            "music",
+            "interactive",
+            "creative-coding"
+        ],
+        "emoji": "📡"
+    },
+    {
+        "date": "2026-03-28",
         "slug": "musical-canvas",
         "title": "Musical Canvas",
         "description": "絵を描くように音を奏でる。Web Audio APIとCanvasを使った共感覚的なドローイングツール。",

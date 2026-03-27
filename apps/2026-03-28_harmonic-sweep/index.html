@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Harmonic Sweep — Daily Ferment</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #0a0a0f;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+            cursor: crosshair;
+            color: #e8e6e3;
+        }
+
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        .ui-layer {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 24px;
+        }
+
+        .header-area {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .title h1 {
+            font-size: 1.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #c084fc, #34d399, #fb923c);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.02em;
+        }
+
+        .title p {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.4);
+            margin-top: 4px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        .controls {
+            pointer-events: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            background: rgba(20, 20, 25, 0.6);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .control-group label {
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.5);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        button,
+        select {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.8);
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            outline: none;
+        }
+
+        button:hover,
+        select:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        button.active {
+            background: rgba(255, 255, 255, 0.2);
+            color: #fff;
+            border-color: rgba(255, 255, 255, 0.3);
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+        }
+
+        .brush-btn {
+            position: relative;
+            padding-left: 28px;
+        }
+
+        .brush-btn::before {
+            content: '';
+            position: absolute;
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        #brush-melody::before {
+            background: #34d399;
+            box-shadow: 0 0 8px #34d399;
+        }
+
+        #brush-bass::before {
+            background: #c084fc;
+            box-shadow: 0 0 8px #c084fc;
+        }
+
+        #brush-perc::before {
+            background: #fb923c;
+            box-shadow: 0 0 8px #fb923c;
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.1);
+            height: 4px;
+            border-radius: 2px;
+            outline: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+        }
+
+        .play-btn {
+            background: #fff;
+            color: #000;
+            font-weight: 700;
+            border: none;
+        }
+
+        .play-btn:hover {
+            background: #f0f0f0;
+        }
+
+        /* Start Overlay */
+        .start-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(10, 10, 15, 0.95);
+            backdrop-filter: blur(10px);
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            pointer-events: auto;
+            transition: opacity 0.4s;
+        }
+
+        .start-btn {
+            font-size: 1.2rem;
+            padding: 16px 48px;
+            background: #fff;
+            color: #000;
+            border-radius: 100px;
+            font-weight: 800;
+            letter-spacing: 0.05em;
+        }
+
+        .start-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="start-overlay" id="startOverlay">
+        <div style="text-align: center; margin-bottom: 40px;">
+            <h1
+                style="font-size: 3rem; margin-bottom: 16px; background: linear-gradient(135deg, #c084fc, #34d399, #fb923c); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+                Harmonic Sweep</h1>
+            <p style="color: rgba(255,255,255,0.5);">絵を描いて、ループシーケンサーを作る。</p>
+        </div>
+        <button class="start-btn" id="startBtn">ENTER</button>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <div class="ui-layer">
+        <div class="header-area">
+            <div class="title">
+                <h1>Harmonic Sweep</h1>
+                <p>POLYPHONIC CANVAS SEQUENCER</p>
+            </div>
+
+            <div class="controls">
+                <div class="control-group">
+                    <label>Transport</label>
+                    <div class="btn-row">
+                        <button id="playBtn" class="play-btn">PLAY</button>
+                        <button id="clearBtn">CLEAR</button>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>Tempo / BPM: <span id="bpmVal">120</span></label>
+                    <input type="range" id="bpmSlider" min="60" max="240" value="120">
+                </div>
+
+                <div class="control-group">
+                    <label>Scale</label>
+                    <select id="scaleSelect">
+                        <option value="pentatonic">Pentatonic</option>
+                        <option value="minor">Minor</option>
+                        <option value="major">Major</option>
+                        <option value="chromatic">Chromatic</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label>Instruments (Brushes)</label>
+                    <div class="btn-row">
+                        <button class="brush-btn active" id="brush-melody" data-brush="melody">Melody</button>
+                        <button class="brush-btn" id="brush-bass" data-brush="bass">Bass</button>
+                        <button class="brush-btn" id="brush-perc" data-brush="perc">Perc</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div
+            style="text-align: center; color: rgba(255,255,255,0.3); font-size: 0.75rem; letter-spacing: 0.1em; font-family: monospace;">
+            ドラッグしてシーケンスを描画 ✦ スキャナーが交差すると発音します
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // Core Configuration
+        // ==========================================
+        const CONFIG = {
+            melody: { color: '#34d399', octaves: [4, 5, 6] },
+            bass: { color: '#c084fc', octaves: [2, 3] },
+            perc: { color: '#fb923c', octaves: null } // Percussion is non-pitched here
+        };
+
+        const SCALES = {
+            pentatonic: [0, 2, 4, 7, 9],
+            minor: [0, 2, 3, 5, 7, 8, 10],
+            major: [0, 2, 4, 5, 7, 9, 11],
+            chromatic: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+        };
+
+        // Global State
+        let state = {
+            isPlaying: false,
+            bpm: 120,
+            currentBrush: 'melody',
+            currentScale: 'pentatonic',
+            scannerX: 0,
+        };
+
+        let paths = [];
+        let currentPath = null;
+        let particles = [];
+        let hitMarkers = []; // For rendering flashes where intersections happen
+
+        // ==========================================
+        // Audio Engine (Web Audio API)
+        // ==========================================
+        let audioCtx;
+        let masterGain;
+        let delayNode, feedbackGain;
+
+        // Frequencies base: C0 = ~16.35Hz.
+        function getNoteFreq(midiNote) {
+            return 440 * Math.pow(2, (midiNote - 69) / 12);
+        }
+
+        function initAudio() {
+            if (audioCtx) return;
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            audioCtx = new AudioContext();
+
+            masterGain = audioCtx.createGain();
+            masterGain.gain.value = 0.5;
+
+            // Delay effect
+            delayNode = audioCtx.createDelay();
+            delayNode.delayTime.value = 0.33; // ~dotted 8th at 120bpm, but we can keep it fixed for aesthetics
+            feedbackGain = audioCtx.createGain();
+            feedbackGain.gain.value = 0.4;
+
+            delayNode.connect(feedbackGain);
+            feedbackGain.connect(delayNode);
+            delayNode.connect(masterGain);
+
+            masterGain.connect(audioCtx.destination);
+        }
+
+        function mapYToFreq(y, type) {
+            if (type === 'perc') return 0;
+
+            const conf = CONFIG[type];
+            const scaleIntervals = SCALES[state.currentScale];
+            const octaves = conf.octaves;
+
+            // Generate all available MIDI notes for this scale and selected octaves
+            let availableNotes = [];
+            const baseNote = 24; // C1
+            for (let oct of octaves) {
+                for (let interval of scaleIntervals) {
+                    availableNotes.push(baseNote + (oct * 12) + interval);
+                }
+            }
+
+            // Map screen Y (bottom to top) to index in availableNotes
+            const ratio = 1 - (y / window.innerHeight);
+            const index = Math.max(0, Math.min(availableNotes.length - 1, Math.floor(ratio * availableNotes.length)));
+            const midiNote = availableNotes[index];
+
+            return getNoteFreq(midiNote);
+        }
+
+        function playSynth(freq, type, panX) {
+            if (!audioCtx || audioCtx.state === 'suspended') return;
+            const t = audioCtx.currentTime;
+
+            if (type === 'perc') {
+                playPercussion(panX);
+                return;
+            }
+
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            const panner = new StereoPannerNode(audioCtx, { pan: panX });
+
+            if (type === 'melody') {
+                osc.type = 'triangle';
+                gain.gain.setValueAtTime(0, t);
+                gain.gain.linearRampToValueAtTime(0.3, t + 0.05);
+                gain.gain.exponentialRampToValueAtTime(0.001, t + 0.8);
+                osc.frequency.setValueAtTime(freq, t);
+            } else if (type === 'bass') {
+                osc.type = 'sawtooth';
+                // Filter for bass
+                const filter = audioCtx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(freq * 3, t);
+                filter.frequency.exponentialRampToValueAtTime(freq * 0.5, t + 0.5);
+
+                gain.gain.setValueAtTime(0, t);
+                gain.gain.linearRampToValueAtTime(0.4, t + 0.02);
+                gain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+
+                osc.frequency.setValueAtTime(freq, t);
+
+                osc.connect(filter);
+                filter.connect(gain);
+                gain.connect(panner);
+                panner.connect(masterGain);
+
+                osc.start(t);
+                osc.stop(t + 0.5);
+                return;
+            }
+
+            osc.connect(gain);
+            gain.connect(panner);
+
+            // Melody goes to delay as well
+            if (type === 'melody') {
+                panner.connect(delayNode);
+            }
+            panner.connect(masterGain);
+
+            osc.start(t);
+            osc.stop(t + 1.0);
+        }
+
+        function playPercussion(panX) {
+            const t = audioCtx.currentTime;
+            // Synthesize a kick/snare hybrid
+
+            // Noise component
+            const bufferSize = audioCtx.sampleRate * 0.1; // 100ms
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = Math.random() * 2 - 1;
+            }
+            const noise = audioCtx.createBufferSource();
+            noise.buffer = buffer;
+            const noiseFilter = audioCtx.createBiquadFilter();
+            noiseFilter.type = 'highpass';
+            noiseFilter.frequency.value = 1000;
+            const noiseGain = audioCtx.createGain();
+            noiseGain.gain.setValueAtTime(0.3, t);
+            noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+
+            // Tone component (kick)
+            const osc = audioCtx.createOscillator();
+            const oscGain = audioCtx.createGain();
+            osc.frequency.setValueAtTime(150, t);
+            osc.frequency.exponentialRampToValueAtTime(0.001, t + 0.1);
+            oscGain.gain.setValueAtTime(0.8, t);
+            oscGain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+
+            const panner = new StereoPannerNode(audioCtx, { pan: panX });
+
+            noise.connect(noiseFilter);
+            noiseFilter.connect(noiseGain);
+            noiseGain.connect(panner);
+
+            osc.connect(oscGain);
+            oscGain.connect(panner);
+
+            panner.connect(masterGain);
+
+            noise.start(t);
+            osc.start(t);
+            noise.stop(t + 0.1);
+            osc.stop(t + 0.1);
+        }
+
+        // ==========================================
+        // Visual Engine (Canvas)
+        // ==========================================
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let width, height, dpr;
+
+        function resize() {
+            dpr = window.devicePixelRatio || 1;
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width * dpr;
+            canvas.height = height * dpr;
+
+            // Check if we are shrinking, we might need to clamp scanner
+            if (state.scannerX > width) state.scannerX = 0;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // --- Interaction ---
+        function getEventPos(e) {
+            const x = e.clientX || (e.touches && e.touches[0].clientX);
+            const y = e.clientY || (e.touches && e.touches[0].clientY);
+            return { x, y };
+        }
+
+        canvas.addEventListener('mousedown', e => {
+            const { x, y } = getEventPos(e);
+            if (state.currentBrush === 'perc') {
+                // Percussions are just points
+                paths.push({ type: 'perc', points: [{ x, y }], triggered: false });
+                // Play sound immediately on placement
+                const panX = (x / width) * 2 - 1;
+                playSynth(0, 'perc', panX);
+                spawnParticles(x, y, CONFIG.perc.color);
+            } else {
+                currentPath = { type: state.currentBrush, points: [{ x, y }], triggeredSegments: [] };
+            }
+        });
+
+        window.addEventListener('mousemove', e => {
+            if (!currentPath) return;
+            const { x, y } = getEventPos(e);
+            currentPath.points.push({ x, y });
+        });
+
+        window.addEventListener('mouseup', () => {
+            if (currentPath && currentPath.points.length > 1) {
+                paths.push(currentPath);
+            }
+            currentPath = null;
+        });
+
+        // Touch support mapping to mouse handlers
+        canvas.addEventListener('touchstart', e => { canvas.dispatchEvent(new MouseEvent('mousedown', { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY })); }, { passive: false });
+        window.addEventListener('touchmove', e => { e.preventDefault(); if (currentPath) window.dispatchEvent(new MouseEvent('mousemove', { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY })); }, { passive: false });
+        window.addEventListener('touchend', e => { window.dispatchEvent(new MouseEvent('mouseup')); });
+
+        function spawnParticles(x, y, color) {
+            hitMarkers.push({ x, y, life: 1, color });
+            for (let i = 0; i < 6; i++) {
+                particles.push({
+                    x, y,
+                    vx: (Math.random() - 0.5) * 8,
+                    vy: (Math.random() - 0.5) * 8,
+                    life: 1,
+                    decay: Math.random() * 0.05 + 0.02,
+                    color
+                });
+            }
+        }
+
+        // --- Logic Loop ---
+        let lastTime = performance.now();
+        function animate(time) {
+            const dt = (time - lastTime) / 1000;
+            lastTime = time;
+
+            // Update Scanner
+            let prevScannerX = state.scannerX;
+            if (state.isPlaying) {
+                // Speed based on BPM. 1 measure (4 beats) per screen horizontally.
+                // At 120BPM, 1 beat = 0.5s. 4 beats = 2s. So full screen in 2s.
+                const beatsPerSecond = state.bpm / 60;
+                const screenTime = 4 / beatsPerSecond; // time to cross screen
+                const speed = width / screenTime; // pixels per second
+
+                state.scannerX += speed * dt;
+                if (state.scannerX > width) {
+                    state.scannerX = 0;
+                    prevScannerX = 0;
+                    // Reset trigger states for looping
+                    paths.forEach(p => {
+                        if (p.type === 'perc') p.triggered = false;
+                        else p.triggeredSegments = [];
+                    });
+                }
+            }
+
+            // Check Intersections
+            if (state.isPlaying && prevScannerX !== state.scannerX) {
+                paths.forEach(path => {
+                    if (path.type === 'perc') {
+                        const pt = path.points[0];
+                        if (!path.triggered && ((prevScannerX <= pt.x && state.scannerX >= pt.x) || (prevScannerX >= pt.x && state.scannerX <= pt.x))) {
+                            path.triggered = true;
+                            const panX = (pt.x / width) * 2 - 1;
+                            playSynth(0, 'perc', panX);
+                            spawnParticles(pt.x, pt.y, CONFIG.perc.color);
+                        }
+                    } else {
+                        // Lines (Melody/Bass)
+                        // To prevent massive triggering, we check line segments
+                        for (let i = 0; i < path.points.length - 1; i++) {
+                            // Only trigger each segment once per loop
+                            if (path.triggeredSegments[i]) continue;
+
+                            const p1 = path.points[i];
+                            const p2 = path.points[i + 1];
+
+                            // Determine bounds of segment
+                            const minX = Math.min(p1.x, p2.x);
+                            const maxX = Math.max(p1.x, p2.x);
+
+                            // Check if scanner crossed this segment's X range
+                            if (minX <= state.scannerX && maxX >= prevScannerX) {
+                                // Interpolate Y at crossing point
+                                const t = (state.scannerX - p1.x) / (p2.x - p1.x || 1);
+                                const intersectY = p1.y + t * (p2.y - p1.y);
+
+                                path.triggeredSegments[i] = true;
+
+                                const freq = mapYToFreq(intersectY, path.type);
+                                const panX = (state.scannerX / width) * 2 - 1;
+                                playSynth(freq, path.type, panX);
+                                spawnParticles(state.scannerX, intersectY, CONFIG[path.type].color);
+
+                                // Only trigger ONE segment per path per frame to avoid chorusing glitched sounds
+                                break;
+                            }
+                        }
+                    }
+                });
+            }
+
+            // --- Rendering ---
+            // Motion blur bg
+            ctx.fillStyle = 'rgba(10, 10, 15, 0.2)';
+            ctx.fillRect(0, 0, width, height);
+
+            ctx.save();
+            ctx.scale(dpr, dpr);
+
+            // Draw active path
+            drawPaths([currentPath].filter(Boolean), true);
+            // Draw finalized paths
+            drawPaths(paths, false);
+
+            // Draw Scanner
+            if (state.isPlaying) {
+                ctx.beginPath();
+                ctx.moveTo(state.scannerX, 0);
+                ctx.lineTo(state.scannerX, height);
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                ctx.shadowColor = '#fff';
+                ctx.shadowBlur = 10;
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+            }
+
+            // Draw Hit Markers & Particles
+            hitMarkers.forEach((m, i) => {
+                m.life -= dt * 3;
+                if (m.life <= 0) {
+                    hitMarkers.splice(i, 1);
+                } else {
+                    ctx.beginPath();
+                    ctx.arc(m.x, m.y, (1 - m.life) * 30, 0, Math.PI * 2);
+                    ctx.strokeStyle = m.color;
+                    ctx.globalAlpha = m.life;
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
+            });
+            ctx.globalAlpha = 1;
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life -= p.decay;
+                if (p.life <= 0) particles.splice(i, 1);
+                else {
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.life * 4, 0, Math.PI * 2);
+                    ctx.fillStyle = p.color;
+                    ctx.globalAlpha = p.life;
+                    ctx.fill();
+                }
+            }
+            ctx.globalAlpha = 1;
+
+            ctx.restore();
+            requestAnimationFrame(animate);
+        }
+
+        function drawPaths(pathsArray, isActiveDrawing) {
+            pathsArray.forEach(path => {
+                if (!path) return;
+                const color = CONFIG[path.type].color;
+
+                if (path.type === 'perc') {
+                    const pt = path.points[0];
+                    ctx.beginPath();
+                    ctx.arc(pt.x, pt.y, 8, 0, Math.PI * 2);
+                    ctx.fillStyle = color;
+                    ctx.shadowColor = color;
+                    ctx.shadowBlur = 15;
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                    return;
+                }
+
+                ctx.beginPath();
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.lineWidth = 4;
+                ctx.strokeStyle = color;
+
+                ctx.shadowColor = color;
+                ctx.shadowBlur = 15;
+
+                path.points.forEach((pt, i) => {
+                    if (i === 0) ctx.moveTo(pt.x, pt.y);
+                    else ctx.lineTo(pt.x, pt.y);
+                });
+
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+
+                // Inner core
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#fff';
+                ctx.stroke();
+            });
+        }
+
+        // ==========================================
+        // UI Event Listeners
+        // ==========================================
+        document.getElementById('startBtn').addEventListener('click', () => {
+            initAudio();
+            document.getElementById('startOverlay').style.opacity = '0';
+            setTimeout(() => document.getElementById('startOverlay').style.display = 'none', 400);
+
+            // Auto play on start
+            state.isPlaying = true;
+            document.getElementById('playBtn').textContent = 'PAUSE';
+            document.getElementById('playBtn').classList.add('active');
+        });
+
+        document.getElementById('playBtn').addEventListener('click', (e) => {
+            state.isPlaying = !state.isPlaying;
+            if (state.isPlaying) {
+                if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+                e.target.textContent = 'PAUSE';
+                e.target.classList.add('active');
+            } else {
+                e.target.textContent = 'PLAY';
+                e.target.classList.remove('active');
+            }
+        });
+
+        document.getElementById('clearBtn').addEventListener('click', () => {
+            paths = [];
+            particles = [];
+            hitMarkers = [];
+            state.scannerX = 0; // reset scanner too
+        });
+
+        document.getElementById('bpmSlider').addEventListener('input', (e) => {
+            state.bpm = parseInt(e.target.value);
+            document.getElementById('bpmVal').textContent = state.bpm;
+            if (delayNode) {
+                delayNode.delayTime.value = 60 / state.bpm * 0.75; // Adjust delay to BPM (dotted 8th roughly)
+            }
+        });
+
+        document.getElementById('scaleSelect').addEventListener('change', (e) => {
+            state.currentScale = e.target.value;
+        });
+
+        document.querySelectorAll('.brush-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.brush-btn').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                state.currentBrush = e.target.dataset.brush;
+            });
+        });
+
+        // Start loop
+        requestAnimationFrame(animate);
+
+    </script>
+</body>
+
+</html>
