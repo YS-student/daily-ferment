@@ -52,6 +52,7 @@
             font-weight: 800;
             background: linear-gradient(135deg, #c084fc, #34d399, #fb923c);
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
             letter-spacing: -0.02em;
         }
@@ -153,6 +154,7 @@
 
         input[type="range"] {
             -webkit-appearance: none;
+            appearance: none;
             width: 100%;
             background: rgba(255, 255, 255, 0.1);
             height: 4px;
@@ -216,7 +218,7 @@
     <div class="start-overlay" id="startOverlay">
         <div style="text-align: center; margin-bottom: 40px;">
             <h1
-                style="font-size: 3rem; margin-bottom: 16px; background: linear-gradient(135deg, #c084fc, #34d399, #fb923c); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+                style="font-size: 3rem; margin-bottom: 16px; background: linear-gradient(135deg, #c084fc, #34d399, #fb923c); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;">
                 Harmonic Sweep</h1>
             <p style="color: rgba(255,255,255,0.5);">絵を描いて、ループシーケンサーを作る。</p>
         </div>
@@ -610,7 +612,7 @@
             // --- Rendering ---
             // Motion blur bg
             ctx.fillStyle = 'rgba(10, 10, 15, 0.2)';
-            ctx.fillRect(0, 0, width, height);
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
 
             ctx.save();
             ctx.scale(dpr, dpr);
