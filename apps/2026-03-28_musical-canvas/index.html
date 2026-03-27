@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Musical Canvas — Daily Ferment</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #101014;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+            cursor: crosshair;
+            color: #e8e6e3;
+        }
+
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        .ui-layer {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .title {
+            position: absolute;
+            top: 24px;
+            left: 24px;
+        }
+
+        .title h1 {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: rgba(255, 255, 255, 0.8);
+            letter-spacing: -0.02em;
+        }
+
+        .title p {
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.4);
+            margin-top: 4px;
+            letter-spacing: 0.05em;
+        }
+
+        .controls {
+            position: absolute;
+            top: 24px;
+            right: 24px;
+            pointer-events: auto;
+            display: flex;
+            gap: 12px;
+        }
+
+        button {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.7);
+            padding: 8px 16px;
+            border-radius: 100px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            backdrop-filter: blur(4px);
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+
+        .info {
+            position: absolute;
+            bottom: 24px;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 0.75rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 0.3;
+            }
+
+            50% {
+                opacity: 0.6;
+            }
+        }
+
+        /* Starter overlay */
+        .start-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(16, 16, 20, 0.9);
+            backdrop-filter: blur(8px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            pointer-events: auto;
+            transition: opacity 0.5s;
+        }
+
+        .start-overlay h2 {
+            font-size: 2rem;
+            margin-bottom: 16px;
+            background: linear-gradient(135deg, #c084fc, #34d399);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .start-overlay p {
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 32px;
+        }
+
+        .start-btn {
+            background: #fff;
+            color: #000;
+            border: none;
+            padding: 12px 32px;
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        .start-btn:hover {
+            background: #f0f0f0;
+            color: #000;
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="start-overlay" id="startOverlay">
+        <h2>Musical Canvas</h2>
+        <p>絵を描くように、音を奏でる。</p>
+        <button class="start-btn" id="startBtn">はじめる</button>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <div class="ui-layer">
+        <div class="title">
+            <h1>Musical Canvas</h1>
+            <p>DRAW SOUNDS</p>
+        </div>
+        <div class="controls">
+            <button id="clearBtn">Clear</button>
+        </div>
+        <div class="info">ドラッグして形を描こう ✦ 上下でピッチ変化</div>
+    </div>
+
+    <script>
+        // --- Audio System ---
+        let audioCtx;
+        let masterGain;
+        const SCALES = {
+            pentatonic: [261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33, 659.25, 783.99, 880.00, 1046.50] // C major pentatonic across octaves
+        };
+
+        function initAudio() {
+            if (audioCtx) return;
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            audioCtx = new AudioContext();
+
+            masterGain = audioCtx.createGain();
+            masterGain.gain.value = 0.3;
+
+            // Delay effect for ambient feel
+            const delay = audioCtx.createDelay();
+            delay.delayTime.value = 0.4;
+            const feedback = audioCtx.createGain();
+            feedback.gain.value = 0.3;
+
+            delay.connect(feedback);
+            feedback.connect(delay);
+            delay.connect(masterGain);
+
+            masterGain.connect(audioCtx.destination);
+            masterGain.connect(delay);
+        }
+
+        function playNote(yRatio, xRatio) {
+            if (!audioCtx) return;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+
+            const scale = SCALES.pentatonic;
+            // Map vertical position to scale index (bottom = low, top = high)
+            const noteIndex = Math.floor((1 - yRatio) * scale.length);
+            const freq = scale[Math.max(0, Math.min(scale.length - 1, noteIndex))];
+
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+
+            // Pan based on horizontal position
+            const panner = new StereoPannerNode(audioCtx, { pan: (xRatio * 2) - 1 });
+
+            // Subtle modulation
+            const lfo = audioCtx.createOscillator();
+            lfo.type = 'sine';
+            lfo.frequency.value = 4 + (Math.random() * 4); // 4-8Hz vibrato
+            const lfoGain = audioCtx.createGain();
+            lfoGain.gain.value = freq * 0.01;
+            lfo.connect(lfoGain);
+            lfoGain.connect(osc.frequency);
+
+            // Randomize waveform
+            const waves = ['sine', 'triangle', 'sawtooth'];
+            osc.type = waves[Math.floor(xRatio * waves.length)] || 'sine';
+
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+
+            // Envelope
+            gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+            gainNode.gain.linearRampToValueAtTime(0.1 + (Math.random() * 0.1), audioCtx.currentTime + 0.05);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.5 + (Math.random() * 1.5));
+
+            osc.connect(gainNode);
+            gainNode.connect(panner);
+            panner.connect(masterGain);
+
+            osc.start();
+            lfo.start();
+            osc.stop(audioCtx.currentTime + 3);
+            lfo.stop(audioCtx.currentTime + 3);
+        }
+
+        // --- Visual System ---
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d', { alpha: false });
+        let width, height, dpr;
+        let paths = [];
+        let currentPath = [];
+        let isDrawing = false;
+        let time = 0;
+
+        const COLORS = [
+            '#c084fc', // purple
+            '#818cf8', // indigo
+            '#34d399', // emerald
+            '#fb923c', // amber
+            '#f472b6'  // pink
+        ];
+
+        function resize() {
+            dpr = window.devicePixelRatio || 1;
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width * dpr;
+            canvas.height = height * dpr;
+            canvas.style.width = width + 'px';
+            canvas.style.height = height + 'px';
+            ctx.scale(dpr, dpr);
+        }
+
+        function getGradientColor(ratio) {
+            const idx = Math.floor(ratio * (COLORS.length - 1));
+            const nextIdx = Math.min(idx + 1, COLORS.length - 1);
+            return COLORS[idx]; // Simplified for performance, could interpolate
+        }
+
+        function addPoint(x, y) {
+            const point = {
+                x, y,
+                age: 0,
+                color: COLORS[Math.floor((x / width) * COLORS.length)] || COLORS[0],
+                size: Math.random() * 3 + 2,
+                life: Math.random() * 100 + 100
+            };
+
+            currentPath.push(point);
+
+            // Play sound occasionally while drawing
+            if (currentPath.length % 5 === 0) {
+                playNote(y / height, x / width);
+                spawnParticles(x, y, point.color);
+            }
+        }
+
+        // Particles for visual feedback
+        let particles = [];
+        function spawnParticles(x, y, color) {
+            for (let i = 0; i < 3; i++) {
+                particles.push({
+                    x, y,
+                    vx: (Math.random() - 0.5) * 4,
+                    vy: (Math.random() - 0.5) * 4,
+                    life: 1,
+                    decay: Math.random() * 0.05 + 0.02,
+                    color
+                });
+            }
+        }
+
+        function draw() {
+            time += 0.01;
+
+            // Fade out background slightly for motion blur
+            ctx.fillStyle = 'rgba(16, 16, 20, 0.1)';
+            ctx.fillRect(0, 0, width, height);
+
+            // Draw grid
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.02)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            for (let i = 0; i < width; i += 50) {
+                ctx.moveTo(i, 0); ctx.lineTo(i, height);
+            }
+            for (let i = 0; i < height; i += 50) {
+                ctx.moveTo(0, i); ctx.lineTo(width, i);
+            }
+            ctx.stroke();
+
+            // Draw active path with glow
+            if (currentPath.length > 1) {
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+
+                // Outer glow
+                ctx.beginPath();
+                ctx.moveTo(currentPath[0].x, currentPath[0].y);
+                for (let i = 1; i < currentPath.length; i++) {
+                    ctx.lineTo(currentPath[i].x, currentPath[i].y);
+                }
+                ctx.strokeStyle = currentPath[currentPath.length - 1].color;
+                ctx.lineWidth = 12;
+                ctx.globalAlpha = 0.1;
+                ctx.stroke();
+
+                // Inner line
+                ctx.beginPath();
+                ctx.moveTo(currentPath[0].x, currentPath[0].y);
+                for (let i = 1; i < currentPath.length; i++) {
+                    ctx.lineTo(currentPath[i].x, currentPath[i].y);
+                }
+                ctx.lineWidth = 3;
+                ctx.globalAlpha = 1;
+                ctx.stroke();
+            }
+
+            // Draw finished paths
+            for (let pIdx = paths.length - 1; pIdx >= 0; pIdx--) {
+                const path = paths[pIdx];
+
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.beginPath();
+
+                let alivePoints = 0;
+
+                for (let i = 0; i < path.length; i++) {
+                    const pt = path[i];
+                    pt.age++;
+
+                    // Wiggle effect
+                    const noisex = Math.sin(pt.age * 0.05 + pt.y * 0.01) * 0.5;
+                    const noisey = Math.cos(pt.age * 0.05 + pt.x * 0.01) * 0.5;
+
+                    if (i === 0) {
+                        ctx.moveTo(pt.x + noisex, pt.y + noisey);
+                    } else {
+                        ctx.lineTo(pt.x + noisex, pt.y + noisey);
+                    }
+
+                    if (pt.age < pt.life) alivePoints++;
+                }
+
+                // Fade out old paths
+                const oldestPoint = path[0];
+                const alpha = Math.max(0, 1 - (oldestPoint.age / oldestPoint.life));
+
+                ctx.strokeStyle = oldestPoint.color;
+                ctx.lineWidth = 2;
+                ctx.globalAlpha = alpha * 0.6;
+                ctx.stroke();
+
+                // Remove dead paths
+                if (alivePoints === 0) {
+                    paths.splice(pIdx, 1);
+                }
+            }
+
+            // Draw particles
+            ctx.globalAlpha = 1;
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life -= p.decay;
+
+                if (p.life <= 0) {
+                    particles.splice(i, 1);
+                } else {
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.life * 3, 0, Math.PI * 2);
+                    ctx.fillStyle = p.color;
+                    ctx.globalAlpha = p.life;
+                    ctx.fill();
+                }
+            }
+
+            ctx.globalAlpha = 1;
+            requestAnimationFrame(draw);
+        }
+
+        // --- Input Handling ---
+        function handleStart(e) {
+            if (!audioCtx || audioCtx.state === 'suspended') return;
+            isDrawing = true;
+            currentPath = [];
+            const x = e.clientX || (e.touches && e.touches[0].clientX);
+            const y = e.clientY || (e.touches && e.touches[0].clientY);
+            addPoint(x, y);
+        }
+
+        function handleMove(e) {
+            if (!isDrawing) return;
+            e.preventDefault();
+            const x = e.clientX || (e.touches && e.touches[0].clientX);
+            const y = e.clientY || (e.touches && e.touches[0].clientY);
+            addPoint(x, y);
+        }
+
+        function handleEnd() {
+            if (!isDrawing) return;
+            isDrawing = false;
+            if (currentPath.length > 0) {
+                paths.push([...currentPath]);
+            }
+        }
+
+        // --- Init ---
+        document.getElementById('startBtn').addEventListener('click', () => {
+            initAudio();
+            document.getElementById('startOverlay').style.opacity = '0';
+            setTimeout(() => {
+                document.getElementById('startOverlay').style.display = 'none';
+            }, 500);
+        });
+
+        document.getElementById('clearBtn').addEventListener('click', () => {
+            paths = [];
+            particles = [];
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        });
+
+        window.addEventListener('resize', resize);
+
+        // Mouse
+        canvas.addEventListener('mousedown', handleStart);
+        window.addEventListener('mousemove', handleMove);
+        window.addEventListener('mouseup', handleEnd);
+
+        // Touch
+        canvas.addEventListener('touchstart', handleStart, { passive: false });
+        window.addEventListener('touchmove', handleMove, { passive: false });
+        window.addEventListener('touchend', handleEnd);
+
+        resize();
+        draw();
+    </script>
+</body>
+
+</html>

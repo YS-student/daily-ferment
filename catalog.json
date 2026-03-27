@@ -1,5 +1,18 @@
 [
     {
+        "date": "2026-03-28",
+        "slug": "musical-canvas",
+        "title": "Musical Canvas",
+        "description": "絵を描くように音を奏でる。Web Audio APIとCanvasを使った共感覚的なドローイングツール。",
+        "tags": [
+            "art",
+            "music",
+            "interactive",
+            "creative-coding"
+        ],
+        "emoji": "🎵"
+    },
+    {
         "date": "2026-03-27",
         "slug": "particle-orbit",
         "title": "Particle Orbit",
