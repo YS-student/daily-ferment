@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Photo Sonifier — Daily Ferment</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #0a0a0f;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+            color: #e8e6e3;
+        }
+
+        #dropZone {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #0a0a0f;
+            z-index: 50;
+            transition: opacity 0.3s;
+        }
+
+        #dropZone.dragover {
+            background: #1a1a24;
+            border: 4px dashed #34d399;
+        }
+
+        .upload-btn {
+            background: #fff;
+            color: #000;
+            border: none;
+            padding: 16px 32px;
+            font-size: 1.2rem;
+            font-weight: 700;
+            border-radius: 100px;
+            cursor: pointer;
+            margin-top: 24px;
+            transition: transform 0.2s;
+        }
+
+        .upload-btn:hover {
+            transform: scale(1.05);
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        canvas {
+            display: block;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+        }
+
+        .ui-layer {
+            position: absolute;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+            display: flex;
+            gap: 16px;
+            background: rgba(20, 20, 25, 0.7);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 16px 24px;
+            border-radius: 24px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            align-items: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s;
+        }
+
+        .ui-layer.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            min-width: 120px;
+        }
+
+        .control-group label {
+            font-size: 0.65rem;
+            color: rgba(255, 255, 255, 0.5);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        button,
+        select {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.8);
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            outline: none;
+            transition: all 0.2s;
+        }
+
+        button:hover,
+        select:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .play-btn {
+            background: #fff;
+            color: #000;
+            font-weight: 700;
+            border: none;
+        }
+
+        .play-btn:hover {
+            background: #f0f0f0;
+        }
+
+        .play-btn.active {
+            background: #34d399;
+            color: #000;
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.1);
+            height: 4px;
+            border-radius: 2px;
+            outline: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+        }
+
+        .app-title {
+            position: absolute;
+            top: 24px;
+            left: 24px;
+            z-index: 10;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+
+        .app-title h1 {
+            font-size: 1.2rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #60a5fa, #c084fc);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .app-title p {
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.4);
+            letter-spacing: 0.1em;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Upload Screen -->
+    <div id="dropZone">
+        <h1
+            style="font-size: 3rem; margin-bottom: 16px; background: linear-gradient(135deg, #60a5fa, #c084fc); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;">
+            Photo Sonifier</h1>
+        <p style="color: rgba(255,255,255,0.5);">写真をドロップするか、ファイルを選択して音楽に変換</p>
+        <button class="upload-btn" onclick="document.getElementById('fileInput').click()">写真を選ぶ</button>
+        <input type="file" id="fileInput" accept="image/*">
+    </div>
+
+    <!-- Main UI -->
+    <div class="app-title" id="appTitle">
+        <h1>Photo Sonifier</h1>
+        <p>IMAGE TO SOUND CONVERTER</p>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <div class="ui-layer" id="uiLayer">
+        <button id="playBtn" class="play-btn">PLAY</button>
+
+        <div class="control-group">
+            <label>Speed: <span id="speedVal">1.0</span>x</label>
+            <input type="range" id="speedSlider" min="0.1" max="3" step="0.1" value="1.0">
+        </div>
+
+        <div class="control-group">
+            <label>Resolution (Bins)</label>
+            <select id="binSelect">
+                <option value="16">16 Bins (Simple)</option>
+                <option value="24" selected>24 Bins (Standard)</option>
+                <option value="32">32 Bins (Dense)</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label>Scale</label>
+            <select id="scaleSelect">
+                <option value="minor_pentatonic">Minor Pentatonic</option>
+                <option value="major_pentatonic">Major Pentatonic</option>
+                <option value="aeolian">Aeolian (Minor)</option>
+                <option value="ionian">Ionian (Major)</option>
+            </select>
+        </div>
+
+        <button id="newPhotoBtn">New Photo</button>
+    </div>
+
+    <script>
+        // --- State ---
+        const state = {
+            isPlaying: false,
+            speed: 1.0,
+            bins: 24,
+            scaleName: 'minor_pentatonic',
+            scannerX: 0,
+            imageLoaded: false
+        };
+
+        // --- Musical Scales ---
+        const SCALES = {
+            minor_pentatonic: [0, 3, 5, 7, 10],     // C Minor Pentatonic
+            major_pentatonic: [0, 2, 4, 7, 9],      // C Major Pentatonic
+            aeolian: [0, 2, 3, 5, 7, 8, 10],        // Natural Minor
+            ionian: [0, 2, 4, 5, 7, 9, 11]          // Major
+        };
+
+        // Generate frequencies spanning multiple octaves
+        const baseFreq = 65.41; // C2
+        const freqTable = {};
+        for (const [name, intervals] of Object.entries(SCALES)) {
+            freqTable[name] = [];
+            for (let oct = 0; oct < 5; oct++) {
+                for (let interval of intervals) {
+                    const note = (oct * 12) + interval;
+                    freqTable[name].push(baseFreq * Math.pow(2, note / 12));
+                }
+            }
+        }
+
+        // --- Audio Engine ---
+        let audioCtx;
+        let masterCompressor;
+        let masterGain;
+        let delayNode, feedbackGain;
+
+        function initAudio() {
+            if (audioCtx) return;
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            audioCtx = new AudioContext();
+
+            masterCompressor = audioCtx.createDynamicsCompressor();
+            masterCompressor.threshold.value = -12;
+            masterCompressor.knee.value = 10;
+            masterCompressor.ratio.value = 8;
+            masterCompressor.attack.value = 0.005;
+            masterCompressor.release.value = 0.1;
+
+            masterGain = audioCtx.createGain();
+            masterGain.gain.value = 0.6; // Base volume reduction
+
+            // Ambience (Delay)
+            delayNode = audioCtx.createDelay();
+            delayNode.delayTime.value = 0.3;
+            feedbackGain = audioCtx.createGain();
+            feedbackGain.gain.value = 0.5;
+
+            // Routing
+            masterCompressor.connect(masterGain);
+            masterGain.connect(audioCtx.destination);
+
+            masterGain.connect(delayNode);
+            delayNode.connect(feedbackGain);
+            feedbackGain.connect(delayNode);
+            delayNode.connect(audioCtx.destination);
+        }
+
+        function playNote(freq, velocity, hue) {
+            if (!audioCtx || audioCtx.state === 'suspended') return;
+            const t = audioCtx.currentTime;
+
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+
+            // Hue determines pan (-1 to 1) roughly
+            const panVal = ((hue / 360) * 2) - 1;
+            const panner = new StereoPannerNode(audioCtx, { pan: panVal });
+
+            // Oscillator type based on frequency to keep it musical
+            osc.type = freq < 150 ? 'triangle' : 'sine';
+
+            // Add subtle harmonics
+            if (freq > 200 && Math.random() > 0.5) osc.type = 'triangle';
+
+            gain.gain.setValueAtTime(0, t);
+            // Velocity scales attack and max gain
+            const maxGain = (velocity * velocity) * 0.15 + 0.05; // Curve for better dynamics
+            gain.gain.linearRampToValueAtTime(maxGain, t + 0.02 + (velocity * 0.05));
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3 + (Math.random() * 0.5));
+
+            osc.connect(gain);
+            gain.connect(panner);
+            panner.connect(masterCompressor);
+
+            osc.frequency.setValueAtTime(freq, t);
+            osc.start(t);
+            // Add slight detune drift
+            osc.frequency.linearRampToValueAtTime(freq + (Math.random() * 4 - 2), t + 1);
+            osc.stop(t + 1.5);
+        }
+
+        // --- Image Processing & Canvas ---
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d', { alpha: false, willReadFrequently: true });
+
+        let imgObj = null;
+        let imgData = null; // offscreen image data array
+        let imgW = 0, imgH = 0;
+        let dpr = 1;
+        let renderW, renderH; // Display size
+
+        function loadFile(file) {
+            if (!file || !file.type.startsWith('image/')) return;
+            const reader = new FileReader();
+            reader.onload = e => {
+                const img = new Image();
+                img.onload = () => processImage(img);
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function processImage(img) {
+            imgObj = img;
+
+            // Calculate display dimensions to fit screen while maintaining aspect ratio
+            const maxW = window.innerWidth * 0.8;
+            const maxH = window.innerHeight * 0.7;
+            const scale = Math.min(maxW / img.width, maxH / img.height);
+
+            renderW = img.width * scale;
+            renderH = img.height * scale;
+
+            dpr = window.devicePixelRatio || 1;
+            canvas.width = renderW * dpr;
+            canvas.height = renderH * dpr;
+            canvas.style.width = renderW + 'px';
+            canvas.style.height = renderH + 'px';
+            ctx.scale(dpr, dpr);
+
+            // Draw original image to an offscreen canvas for fast pixel reading
+            // We scale it down horizontally so scanning doesn't take 4000 steps for large images.
+            // We scan 1 'column' per logic frame. Let's fix analysis width to max 800px.
+            imgW = Math.min(img.width, 800);
+            imgH = Math.floor(img.height * (imgW / img.width));
+
+            const offscreen = document.createElement('canvas');
+            offscreen.width = imgW;
+            offscreen.height = imgH;
+            const oCtx = offscreen.getContext('2d', { willReadFrequently: true });
+            oCtx.drawImage(img, 0, 0, imgW, imgH);
+            imgData = oCtx.getImageData(0, 0, imgW, imgH).data;
+
+            // Setup UI
+            document.getElementById('dropZone').style.opacity = '0';
+            setTimeout(() => document.getElementById('dropZone').style.display = 'none', 300);
+            document.getElementById('uiLayer').classList.add('visible');
+            document.getElementById('appTitle').style.opacity = '1';
+
+            state.imageLoaded = true;
+            state.scannerX = 0;
+            initAudio();
+
+            // Initial render pass
+            renderFrame(0, []);
+        }
+
+        // Helper: RGB to HSL (for hue extraction)
+        function rgbToHsl(r, g, b) {
+            r /= 255; g /= 255; b /= 255;
+            const max = Math.max(r, g, b), min = Math.min(r, g, b);
+            let h, s, l = (max + min) / 2;
+            if (max === min) {
+                h = s = 0; // achromatic
+            } else {
+                const d = max - min;
+                s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+                switch (max) {
+                    case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                    case g: h = (b - r) / d + 2; break;
+                    case b: h = (r - g) / d + 4; break;
+                }
+                h /= 6;
+            }
+            return [h * 360, s, l];
+        }
+
+        // --- Animation & Sonification Loop ---
+        let lastTime = performance.now();
+        let scanAccumulator = 0; // For subpixel/framerate-independent scanning
+
+        function animate(time) {
+            requestAnimationFrame(animate);
+            if (!state.imageLoaded) return;
+
+            const dt = (time - lastTime) / 1000;
+            lastTime = time;
+
+            let triggeredBins = []; // Info about what triggered this frame for rendering
+
+            if (state.isPlaying) {
+                // Base speed: 100 pixels per second * user speed multiplier
+                const scanSpeed = 100 * state.speed;
+                scanAccumulator += scanSpeed * dt;
+
+                // While accumulator has accumulated at least 1 pixel of progress
+                while (scanAccumulator >= 1) {
+                    const x = Math.floor(state.scannerX);
+
+                    if (x < imgW) {
+                        // Sonify this column `x`
+                        triggeredBins = sonifyColumn(x);
+                    }
+
+                    state.scannerX += 1;
+                    scanAccumulator -= 1;
+
+                    if (state.scannerX >= imgW) {
+                        state.scannerX = 0; // Loop back
+                    }
+                }
+            }
+
+            // Render graphics
+            renderFrame(state.scannerX / imgW, triggeredBins);
+        }
+
+        function sonifyColumn(x) {
+            const activeBins = [];
+            const binHeight = imgH / state.bins;
+            const freqs = freqTable[state.scaleName];
+
+            // Make sure we have enough frequencies. Map bottom to low, top to high.
+            for (let b = 0; b < state.bins; b++) {
+                const startY = Math.floor(b * binHeight);
+                const endY = Math.floor((b + 1) * binHeight);
+
+                let sumIntensity = 0;
+                let sumR = 0, sumG = 0, sumB = 0;
+                let count = 0;
+
+                // Sample pixels in this bin's bounding box
+                for (let y = startY; y < endY; y++) {
+                    const idx = (y * imgW + x) * 4;
+                    const r = imgData[idx];
+                    const g = imgData[idx + 1];
+                    const bl = imgData[idx + 2];
+
+                    // Perceived luminance
+                    const luma = 0.299 * r + 0.587 * g + 0.114 * bl;
+
+                    // Noise gate: only count significantly bright pixels
+                    if (luma > 40) {
+                        sumIntensity += luma;
+                        sumR += r; sumG += g; sumB += bl;
+                        count++;
+                    }
+                }
+
+                if (count > 0) {
+                    const avgIntensity = sumIntensity / count;
+                    // Threshold trigger (if average intensity > X)
+                    if (avgIntensity > 80) { // Arbitrary brightness threshold to trigger note
+                        const intensityRatio = Math.min(1, avgIntensity / 255);
+
+                        // Map bin index (0 = top, N-1 = bottom) to pitch
+                        // Top bin = highest pitch
+                        const pitchIndex = Math.min(freqs.length - 1, Math.floor((1 - (b / state.bins)) * freqs.length));
+                        const freq = freqs[pitchIndex];
+
+                        const avgR = sumR / count; const avgG = sumG / count; const avgB = sumB / count;
+                        const [h, s, l] = rgbToHsl(avgR, avgG, avgB);
+
+                        // Play the note! 
+                        // Decrease velocity if there are many bins to prevent wall-of-sound
+                        playNote(freq, intensityRatio * 0.8, h);
+
+                        activeBins.push({ index: b, color: `rgb(${avgR},${avgG},${avgB})`, intensity: intensityRatio });
+                    }
+                }
+            }
+            return activeBins;
+        }
+
+        function renderFrame(progress, triggeredBins) {
+            // 1. Draw base image
+            ctx.drawImage(imgObj, 0, 0, renderW, renderH);
+
+            // 2. Add dark overlay for contrast
+            ctx.fillStyle = 'rgba(10, 10, 15, 0.4)';
+            ctx.fillRect(0, 0, renderW, renderH);
+
+            // 3. Draw triggered visualizers
+            const binH = renderH / state.bins;
+            const drawX = progress * renderW;
+
+            triggeredBins.forEach(tb => {
+                const y = tb.index * binH;
+
+                ctx.fillStyle = tb.color;
+                ctx.shadowColor = tb.color;
+                ctx.shadowBlur = 20;
+
+                // Draw expanding flash
+                ctx.beginPath();
+                ctx.rect(drawX - 5, y, 10 + (tb.intensity * 20), binH);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            });
+
+            // 4. Draw scanner line
+            ctx.beginPath();
+            ctx.moveTo(drawX, 0);
+            ctx.lineTo(drawX, renderH);
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.shadowColor = '#fff';
+            ctx.shadowBlur = 10;
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+
+            // 5. Draw horizontal grid lines subtly
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            for (let i = 1; i < state.bins; i++) {
+                const lineY = i * binH;
+                ctx.moveTo(0, lineY);
+                ctx.lineTo(renderW, lineY);
+            }
+            ctx.stroke();
+        }
+
+        // --- Inputs Handling ---
+        const dropZone = document.getElementById('dropZone');
+
+        dropZone.addEventListener('dragover', e => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+        dropZone.addEventListener('drop', e => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            if (e.dataTransfer.files.length) loadFile(e.dataTransfer.files[0]);
+        });
+
+        document.getElementById('fileInput').addEventListener('change', e => {
+            if (e.target.files.length) loadFile(e.target.files[0]);
+        });
+
+        document.getElementById('playBtn').addEventListener('click', (e) => {
+            if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+            state.isPlaying = !state.isPlaying;
+            e.target.textContent = state.isPlaying ? 'PAUSE' : 'PLAY';
+            e.target.classList.toggle('active', state.isPlaying);
+        });
+
+        document.getElementById('speedSlider').addEventListener('input', (e) => {
+            state.speed = parseFloat(e.target.value);
+            document.getElementById('speedVal').textContent = state.speed.toFixed(1);
+        });
+
+        document.getElementById('binSelect').addEventListener('change', (e) => {
+            state.bins = parseInt(e.target.value);
+        });
+
+        document.getElementById('scaleSelect').addEventListener('change', (e) => {
+            state.scaleName = e.target.value;
+        });
+
+        document.getElementById('newPhotoBtn').addEventListener('click', () => {
+            state.imageLoaded = false;
+            state.isPlaying = false;
+            document.getElementById('playBtn').textContent = 'PLAY';
+            document.getElementById('playBtn').classList.remove('active');
+            document.getElementById('uiLayer').classList.remove('visible');
+            document.getElementById('appTitle').style.opacity = '0';
+
+            const dz = document.getElementById('dropZone');
+            dz.style.display = 'flex';
+            setTimeout(() => dz.style.opacity = '1', 10);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            document.getElementById('fileInput').value = ''; // Reset
+        });
+
+        // Start background animation loop
+        requestAnimationFrame(animate);
+
+    </script>
+</body>
+
+</html>

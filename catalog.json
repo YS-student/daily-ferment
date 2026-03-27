@@ -1,6 +1,20 @@
 [
     {
         "date": "2026-03-28",
+        "slug": "photo-sonifier",
+        "title": "Photo Sonifier",
+        "description": "アップロードした写真をスキャンし、ピクセルデータから自動で和音やリズムを生成するシンセサイザーアプリ。",
+        "tags": [
+            "art",
+            "music",
+            "interactive",
+            "creative-coding",
+            "synthesis"
+        ],
+        "emoji": "📸"
+    },
+    {
+        "date": "2026-03-28",
         "slug": "harmonic-sweep",
         "title": "Harmonic Sweep",
         "description": "描いた絵をループシーケンサーの楽譜にする「ポリフォニック・キャンバス」。UIから3種の楽器とスケールを切り替えて多層的なビートを構築。",
