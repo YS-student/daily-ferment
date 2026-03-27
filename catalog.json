@@ -1,0 +1,14 @@
+[
+    {
+        "date": "2026-03-27",
+        "slug": "particle-orbit",
+        "title": "Particle Orbit",
+        "description": "マウスで引力場を操り、600個のパーティクルに軌道を描かせるインタラクティブ体験。クリックで爆発。",
+        "tags": [
+            "art",
+            "interactive",
+            "creative-coding"
+        ],
+        "emoji": "🌀"
+    }
+]

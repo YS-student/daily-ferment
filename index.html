@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Daily Ferment — 毎日醸すWebアプリ</title>
+  <meta name="description" content="AIが毎日生成する小さなWebアプリのコレクション。アート、ツール、ゲーム、実験的なインタラクション。">
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧪</text></svg>">
+</head>
+<body>
+  <div class="noise-overlay"></div>
+
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="header__badge">
+        <span class="header__badge-dot"></span>
+        <span>fermenting daily</span>
+      </div>
+      <h1 class="header__title">Daily Ferment</h1>
+      <p class="header__subtitle">AIが毎日醸す、小さなWebアプリのコレクション。<br>アート、ツール、ゲーム、実験——何が生まれるかは明日のお楽しみ。</p>
+    </header>
+
+    <!-- Stats -->
+    <div class="stats">
+      <div class="stats__item">
+        <div class="stats__value" id="stats-total">0</div>
+        <div class="stats__label">Total Apps</div>
+      </div>
+      <div class="stats__item">
+        <div class="stats__value" id="stats-streak">0</div>
+        <div class="stats__label">Day Streak</div>
+      </div>
+      <div class="stats__item">
+        <div class="stats__value" id="stats-latest">—</div>
+        <div class="stats__label">Latest</div>
+      </div>
+    </div>
+
+    <!-- Filter Tags -->
+    <div class="filters" id="filters"></div>
+
+    <!-- App Grid -->
+    <main class="grid" id="app-grid"></main>
+
+    <!-- Empty State -->
+    <div class="empty-state" id="empty-state" style="display: none;">
+      <div class="empty-state__emoji">🧫</div>
+      <h2 class="empty-state__title">まだ何も醸されていません</h2>
+      <p class="empty-state__text">最初の発酵が始まるのを待っています。明日、ここに新しいアプリが現れるかもしれません。</p>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <p>Daily Ferment — Powered by AI × 発酵的創造</p>
+    </footer>
+  </div>
+
+  <script>
+    const GRADIENTS = ['gradient-1', 'gradient-2', 'gradient-3', 'gradient-4', 'gradient-5'];
+
+    let catalog = [];
+    let activeFilter = 'all';
+
+    async function init() {
+      try {
+        const res = await fetch('catalog.json');
+        catalog = await res.json();
+      } catch (e) {
+        catalog = [];
+      }
+      updateStats();
+      buildFilters();
+      renderGrid();
+    }
+
+    function updateStats() {
+      document.getElementById('stats-total').textContent = catalog.length;
+
+      // Calculate streak
+      if (catalog.length === 0) {
+        document.getElementById('stats-streak').textContent = '0';
+        document.getElementById('stats-latest').textContent = '—';
+        return;
+      }
+
+      const sorted = [...catalog].sort((a, b) => b.date.localeCompare(a.date));
+      document.getElementById('stats-latest').textContent = sorted[0].date.slice(5); // MM-DD
+
+      let streak = 1;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      for (let i = 0; i < sorted.length - 1; i++) {
+        const curr = new Date(sorted[i].date);
+        const prev = new Date(sorted[i + 1].date);
+        const diffDays = (curr - prev) / (1000 * 60 * 60 * 24);
+        if (diffDays === 1) {
+          streak++;
+        } else {
+          break;
+        }
+      }
+      document.getElementById('stats-streak').textContent = streak;
+    }
+
+    function buildFilters() {
+      const tagSet = new Set();
+      catalog.forEach(app => (app.tags || []).forEach(t => tagSet.add(t)));
+
+      const container = document.getElementById('filters');
+      if (tagSet.size === 0) {
+        container.style.display = 'none';
+        return;
+      }
+
+      const allBtn = createFilterTag('all', 'すべて', true);
+      container.appendChild(allBtn);
+
+      [...tagSet].sort().forEach(tag => {
+        container.appendChild(createFilterTag(tag, tag));
+      });
+    }
+
+    function createFilterTag(value, label, isActive = false) {
+      const btn = document.createElement('button');
+      btn.className = 'filter-tag' + (isActive ? ' active' : '');
+      btn.textContent = label;
+      btn.addEventListener('click', () => {
+        activeFilter = value;
+        document.querySelectorAll('.filter-tag').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        renderGrid();
+      });
+      return btn;
+    }
+
+    function renderGrid() {
+      const grid = document.getElementById('app-grid');
+      const empty = document.getElementById('empty-state');
+
+      const filtered = activeFilter === 'all'
+        ? catalog
+        : catalog.filter(app => (app.tags || []).includes(activeFilter));
+
+      // Sort newest first
+      const sorted = [...filtered].sort((a, b) => b.date.localeCompare(a.date));
+
+      if (sorted.length === 0) {
+        grid.innerHTML = '';
+        grid.style.display = 'none';
+        empty.style.display = 'block';
+        return;
+      }
+
+      empty.style.display = 'none';
+      grid.style.display = 'grid';
+
+      grid.innerHTML = sorted.map((app, i) => `
+        <a class="card" href="apps/${app.date}_${app.slug}/index.html" target="_blank">
+          <div class="card__preview ${GRADIENTS[i % GRADIENTS.length]}">
+            <div class="card__preview-bg"></div>
+            <span>${app.emoji || '🧪'}</span>
+          </div>
+          <div class="card__body">
+            <div class="card__date">${app.date}</div>
+            <h2 class="card__title">${app.title}</h2>
+            <p class="card__description">${app.description}</p>
+            <div class="card__tags">
+              ${(app.tags || []).map(t => `<span class="card__tag">${t}</span>`).join('')}
+            </div>
+          </div>
+        </a>
+      `).join('');
+    }
+
+    init();
+  </script>
+</body>
+</html>
