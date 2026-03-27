@@ -427,6 +427,7 @@
         // --- Animation & Sonification Loop ---
         let lastTime = performance.now();
         let scanAccumulator = 0; // For subpixel/framerate-independent scanning
+        const lastTriggerX = new Array(64).fill(-999); // Prevent continuous firing
 
         function animate(time) {
             requestAnimationFrame(animate);
@@ -448,7 +449,8 @@
 
                     if (x < imgW) {
                         // Sonify this column `x`
-                        triggeredBins = sonifyColumn(x);
+                        const newlyTriggered = sonifyColumn(x);
+                        triggeredBins.push(...newlyTriggered);
                     }
 
                     state.scannerX += 1;
@@ -499,23 +501,28 @@
                 if (count > 0) {
                     const avgIntensity = sumIntensity / count;
                     // Threshold trigger (if average intensity > X)
-                    if (avgIntensity > 80) { // Arbitrary brightness threshold to trigger note
-                        const intensityRatio = Math.min(1, avgIntensity / 255);
+                    if (avgIntensity > 70) {
+                        // Limitation: only trigger if we moved at least 8 pixels since last trigger for this bin
+                        if (Math.abs(x - lastTriggerX[b]) >= 8) {
+                            lastTriggerX[b] = x; // Update memory
 
-                        // Map bin index (0 = top, N-1 = bottom) to pitch
-                        // Top bin = highest pitch
-                        const pitchIndex = Math.min(freqs.length - 1, Math.floor((1 - (b / state.bins)) * freqs.length));
-                        const freq = freqs[pitchIndex];
+                            const intensityRatio = Math.min(1, avgIntensity / 255);
+                            const pitchIndex = Math.min(freqs.length - 1, Math.floor((1 - (b / state.bins)) * freqs.length));
+                            const freq = freqs[pitchIndex];
 
-                        const avgR = sumR / count; const avgG = sumG / count; const avgB = sumB / count;
-                        const [h, s, l] = rgbToHsl(avgR, avgG, avgB);
+                            const avgR = sumR / count; const avgG = sumG / count; const avgB = sumB / count;
+                            const [h, s, l] = rgbToHsl(avgR, avgG, avgB);
 
-                        // Play the note! 
-                        // Decrease velocity if there are many bins to prevent wall-of-sound
-                        playNote(freq, intensityRatio * 0.8, h);
-
-                        activeBins.push({ index: b, color: `rgb(${avgR},${avgG},${avgB})`, intensity: intensityRatio });
+                            // Play!
+                            playNote(freq, intensityRatio * 0.8, h);
+                            activeBins.push({ index: b, color: `rgb(${avgR},${avgG},${avgB})`, intensity: intensityRatio });
+                        }
+                    } else {
+                        // Reset if it gets dark -> Allows next bright spot to trigger immediately (Edge Detection)
+                        lastTriggerX[b] = -999;
                     }
+                } else {
+                    lastTriggerX[b] = -999;
                 }
             }
             return activeBins;
