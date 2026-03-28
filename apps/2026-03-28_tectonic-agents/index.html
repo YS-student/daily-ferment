@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tectonic Agents — 地殻のエージェント</title>
+    <meta name="description" content="見えない断層の上を蠢く自律的なエージェントたち。揺れと摩擦の中から生まれる一過性のネットワークを観察するジェネラティブ体験。">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;400&family=Noto+Sans+JP:wght@200;400&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #030406;
+            overflow: hidden;
+            font-family: 'Inter', 'Noto Sans JP', sans-serif;
+            cursor: crosshair;
+        }
+
+        canvas {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        #bg-canvas {
+            z-index: 1;
+        }
+
+        #main-canvas {
+            z-index: 2;
+        }
+
+        #ui-overlay {
+            position: absolute;
+            bottom: 40px;
+            left: 40px;
+            z-index: 10;
+            pointer-events: none;
+            color: rgba(220, 230, 255, 0.4);
+        }
+
+        .title {
+            font-size: 1.2rem;
+            font-weight: 200;
+            letter-spacing: 0.15em;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            font-size: 0.7rem;
+            font-weight: 200;
+            letter-spacing: 0.05em;
+            opacity: 0.7;
+        }
+
+        #stats {
+            position: absolute;
+            top: 40px;
+            right: 40px;
+            z-index: 10;
+            text-align: right;
+            font-size: 0.7rem;
+            font-weight: 200;
+            color: rgba(220, 230, 255, 0.3);
+            font-family: 'Inter', monospace;
+            pointer-events: none;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="bg-canvas"></canvas>
+    <canvas id="main-canvas"></canvas>
+
+    <div id="ui-overlay">
+        <div class="title">Tectonic Agents</div>
+        <div class="subtitle">地殻のエージェント / 摩擦と自律のネットワーク</div>
+    </div>
+
+    <div id="stats">
+        <div>agents: <span id="agent-count">0</span></div>
+        <div>faults: <span id="fault-count">0</span></div>
+        <div>tremor: <span id="tremor-level">0.00</span></div>
+    </div>
+
+    <script>
+        const CONFIG = {
+            AGENT_COUNT: 400,
+            FAULT_LIFETIME: 2000,
+            MAX_LINK_DIST: 60,
+            REPULSION_RADIUS: 15,
+            BASE_SPEED: 0.6,
+            TREMOR_DECAY: 0.98,
+        };
+
+        const canvas = document.getElementById('main-canvas');
+        const ctx = canvas.getContext('2d');
+        const bgCanvas = document.getElementById('bg-canvas');
+        const bgCtx = bgCanvas.getContext('2d');
+
+        let w, h;
+        let agents = [];
+        let faults = [];
+        let globalTremor = 0; // 地殻の揺れレベル
+        let hueOffset = 210; // 青ベース
+
+        // UI Elements
+        const agentCountEl = document.getElementById('agent-count');
+        const faultCountEl = document.getElementById('fault-count');
+        const tremorLevelEl = document.getElementById('tremor-level');
+
+        // === Resize ===
+        function resize() {
+            w = canvas.width = bgCanvas.width = window.innerWidth;
+            h = canvas.height = bgCanvas.height = window.innerHeight;
+            drawBackground();
+        }
+        window.addEventListener('resize', resize);
+
+        // === Background (Tectonic Plates metaphor) ===
+        function drawBackground() {
+            bgCtx.fillStyle = '#030406';
+            bgCtx.fillRect(0, 0, w, h);
+
+            // Draw grid
+            bgCtx.strokeStyle = 'rgba(255, 255, 255, 0.02)';
+            bgCtx.lineWidth = 1;
+            for (let x = 0; x < w; x += 100) {
+                bgCtx.beginPath(); bgCtx.moveTo(x, 0); bgCtx.lineTo(x, h); bgCtx.stroke();
+            }
+            for (let y = 0; y < h; y += 100) {
+                bgCtx.beginPath(); bgCtx.moveTo(0, y); bgCtx.lineTo(w, y); bgCtx.stroke();
+            }
+        }
+
+        // === Faults (Mouse Interaction) ===
+        let isDrawing = false;
+        let lastX = 0, lastY = 0;
+
+        window.addEventListener('mousedown', e => {
+            isDrawing = true;
+            lastX = e.clientX;
+            lastY = e.clientY;
+            globalTremor += 3; // 画面を揺らす
+        });
+
+        window.addEventListener('mousemove', e => {
+            if (isDrawing) {
+                const dist = Math.hypot(e.clientX - lastX, e.clientY - lastY);
+                if (dist > 20) {
+                    faults.push({
+                        p1: { x: lastX, y: lastY },
+                        p2: { x: e.clientX, y: e.clientY },
+                        age: 0,
+                        intensity: Math.min(dist * 0.1, 5)
+                    });
+                    lastX = e.clientX;
+                    lastY = e.clientY;
+                    globalTremor += 0.5;
+                }
+            }
+        });
+
+        window.addEventListener('mouseup', () => isDrawing = false);
+        window.addEventListener('mouseleave', () => isDrawing = false);
+
+        // Touch support
+        window.addEventListener('touchstart', e => {
+            isDrawing = true;
+            lastX = e.touches[0].clientX;
+            lastY = e.touches[0].clientY;
+            globalTremor += 3;
+        }, { passive: false });
+        window.addEventListener('touchmove', e => {
+            e.preventDefault();
+            if (isDrawing) {
+                const x = e.touches[0].clientX;
+                const y = e.touches[0].clientY;
+                const dist = Math.hypot(x - lastX, y - lastY);
+                if (dist > 20) {
+                    faults.push({
+                        p1: { x: lastX, y: lastY },
+                        p2: { x: x, y: y },
+                        age: 0,
+                        intensity: Math.min(dist * 0.1, 5)
+                    });
+                    lastX = x;
+                    lastY = y;
+                    globalTremor += 0.5;
+                }
+            }
+        }, { passive: false });
+        window.addEventListener('touchend', () => isDrawing = false);
+
+
+        // === Agent Class ===
+        class Agent {
+            constructor() {
+                this.x = Math.random() * window.innerWidth;
+                this.y = Math.random() * window.innerHeight;
+                this.vx = (Math.random() - 0.5) * CONFIG.BASE_SPEED;
+                this.vy = (Math.random() - 0.5) * CONFIG.BASE_SPEED;
+                this.hue = hueOffset + (Math.random() - 0.5) * 40;
+                this.energy = Math.random();
+            }
+
+            update() {
+                // 基本の自律移動 (ノイズウォーク)
+                const angle = (Math.random() - 0.5) * 0.4;
+                const cs = Math.cos(angle);
+                const sn = Math.sin(angle);
+                const nx = this.vx * cs - this.vy * sn;
+                const ny = this.vx * sn + this.vy * cs;
+
+                let speed = Math.hypot(nx, ny);
+                const targetSpeed = CONFIG.BASE_SPEED + (globalTremor * 0.2);
+
+                // 速度正規化と揺れによる加速
+                this.vx = (nx / speed) * mix(speed, targetSpeed, 0.05);
+                this.vy = (ny / speed) * mix(speed, targetSpeed, 0.05);
+
+                // 断層（Faults）への引力
+                let faultForceX = 0;
+                let faultForceY = 0;
+                if (faults.length > 0) {
+                    // 最も近い断層を探す
+                    let minDist = Infinity;
+                    let closestFault = null;
+                    let closestPoint = null;
+
+                    for (let f of faults) {
+                        const cp = closestPointOnSegment(this, f.p1, f.p2);
+                        const dist = Math.hypot(this.x - cp.x, this.y - cp.y);
+                        if (dist < minDist) {
+                            minDist = dist;
+                            closestFault = f;
+                            closestPoint = cp;
+                        }
+                    }
+
+                    if (minDist < 150) {
+                        // 断層に吸い寄せられるが、近づきすぎると沿って動く
+                        const strength = (1 - minDist / 150) * closestFault.intensity * 0.05;
+                        faultForceX = (closestPoint.x - this.x) * strength;
+                        faultForceY = (closestPoint.y - this.y) * strength;
+                        this.energy = Math.min(this.energy + 0.02, 1); // 活発化
+                    }
+                }
+
+                this.vx += faultForceX;
+                this.vy += faultForceY;
+
+                // 摩擦によるエネルギー減衰
+                this.energy = mix(this.energy, 0.1, 0.005);
+
+                // Update position
+                this.x += this.vx;
+                this.y += this.vy;
+
+                // Wrap around edges
+                if (this.x < 0) this.x += w;
+                if (this.x > w) this.x -= w;
+                if (this.y < 0) this.y += h;
+                if (this.y > h) this.y -= h;
+            }
+
+            draw() {
+                const alpha = 0.3 + this.energy * 0.7;
+                const size = 1.5 + this.energy;
+
+                ctx.fillStyle = `hsla(${this.hue}, 80%, 70%, ${alpha})`;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, size, 0, Math.PI * 2);
+                ctx.fill();
+
+                if (this.energy > 0.6) {
+                    ctx.fillStyle = `hsla(${this.hue}, 100%, 80%, ${alpha * 0.5})`;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, size * 2.5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+        }
+
+        // === Helpers ===
+        function mix(a, b, t) {
+            return a * (1 - t) + b * t;
+        }
+
+        function closestPointOnSegment(p, a, b) {
+            const atob = { x: b.x - a.x, y: b.y - a.y };
+            const atop = { x: p.x - a.x, y: p.y - a.y };
+            const lenStr = atob.x * atob.x + atob.y * atob.y;
+            if (lenStr === 0) return a;
+            let t = (atop.x * atob.x + atop.y * atob.y) / lenStr;
+            t = Math.max(0, Math.min(1, t));
+            return { x: a.x + atob.x * t, y: a.y + atob.y * t };
+        }
+
+        // === Init ===
+        for (let i = 0; i < CONFIG.AGENT_COUNT; i++) {
+            agents.push(new Agent());
+        }
+        resize();
+        agentCountEl.textContent = agents.length;
+
+        // === Loop ===
+        function animate() {
+            // 画面の揺れ効果（Transform）
+            if (globalTremor > 0.1) {
+                const shakeX = (Math.random() - 0.5) * globalTremor;
+                const shakeY = (Math.random() - 0.5) * globalTremor;
+                canvas.style.transform = `translate(${shakeX}px, ${shakeY}px)`;
+                globalTremor *= CONFIG.TREMOR_DECAY;
+            } else {
+                canvas.style.transform = 'translate(0, 0)';
+                globalTremor = 0;
+            }
+
+            tremorLevelEl.textContent = globalTremor.toFixed(2);
+
+            // 暗い残像効果
+            ctx.fillStyle = 'rgba(3, 4, 6, 0.15)';
+            ctx.fillRect(0, 0, w, h);
+
+            // Faults (断層) の更新と描画
+            ctx.lineCap = 'round';
+            for (let i = faults.length - 1; i >= 0; i--) {
+                const f = faults[i];
+                f.age++;
+                if (f.age > CONFIG.FAULT_LIFETIME) {
+                    faults.splice(i, 1);
+                    continue;
+                }
+
+                const lifeRatio = 1 - (f.age / CONFIG.FAULT_LIFETIME);
+                const alpha = lifeRatio * 0.4;
+
+                ctx.strokeStyle = `rgba(255, 60, 40, ${alpha})`;
+                ctx.lineWidth = f.intensity * lifeRatio + 1;
+                ctx.beginPath();
+                ctx.moveTo(f.p1.x, f.p1.y);
+                ctx.lineTo(f.p2.x, f.p2.y);
+                ctx.stroke();
+            }
+            faultCountEl.textContent = faults.length;
+
+            // エージェントの更新
+            for (let i = 0; i < agents.length; i++) {
+                agents[i].update();
+            }
+
+            // エージェント同士のネットワーク描画
+            // 空間分割アルゴリズムの代わりに単純ループ (400なら耐えうる)
+            ctx.lineWidth = 0.5;
+            for (let i = 0; i < agents.length; i++) {
+                const a = agents[i];
+
+                // Optimize: skip linking if energy is very low to save performance and make it look clean
+                if (a.energy < 0.2) continue;
+
+                for (let j = i + 1; j < agents.length; j++) {
+                    const b = agents[j];
+                    if (b.energy < 0.2) continue;
+
+                    const dx = a.x - b.x;
+                    const dy = a.y - b.y;
+                    // 矩形チェックで早期リターン
+                    if (Math.abs(dx) > CONFIG.MAX_LINK_DIST || Math.abs(dy) > CONFIG.MAX_LINK_DIST) continue;
+
+                    const distSquare = dx * dx + dy * dy;
+                    if (distSquare < CONFIG.MAX_LINK_DIST * CONFIG.MAX_LINK_DIST) {
+                        const dist = Math.sqrt(distSquare);
+
+                        // 斥力 (近づきすぎを防ぐ)
+                        if (dist < CONFIG.REPULSION_RADIUS) {
+                            const force = (CONFIG.REPULSION_RADIUS - dist) * 0.05;
+                            const fx = (dx / dist) * force;
+                            const fy = (dy / dist) * force;
+                            a.vx += fx; a.vy += fy;
+                            b.vx -= fx; b.vy -= fy;
+                        }
+
+                        // 線を描画
+                        const alpha = (1 - dist / CONFIG.MAX_LINK_DIST) * (a.energy * b.energy);
+                        if (alpha > 0.05) {
+                            ctx.strokeStyle = `hsla(${(a.hue + b.hue) / 2}, 70%, 75%, ${alpha})`;
+                            ctx.beginPath();
+                            ctx.moveTo(a.x, a.y);
+                            ctx.lineTo(b.x, b.y);
+                            ctx.stroke();
+                        }
+                    }
+                }
+            }
+
+            // エージェント描画
+            for (let i = 0; i < agents.length; i++) {
+                agents[i].draw();
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+    </script>
+</body>
+
+</html>
