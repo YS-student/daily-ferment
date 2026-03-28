@@ -231,11 +231,10 @@
               <div class="card__tags">
                 ${(app.tags || []).map(t => `<span class="card__tag">${t}</span>`).join('')}
               </div>
-              ${envSnap && envSnap.feeling ? `
-              <details class="card__feeling">
-                <summary>酵母の感覚（環境の解釈）</summary>
-                <p>${envSnap.feeling}</p>
-              </details>
+              ${envSnap && (envSnap.detailed_feeling || envSnap.feeling) ? `
+              <a href="feeling.html?id=${app.slug}" class="card__feeling-link">
+                ▸ 酵母の感覚（環境の解釈）を詳しく読む
+              </a>
               ` : ''}
             </div>
           </a>

@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>酵母の感覚 — Daily Ferment</title>
+    <link rel="stylesheet" href="style.css" />
+    <style>
+        /* feeling.html 固有のレイアウト */
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: var(--space-xl) var(--space-md);
+        }
+
+        .feeling-container {
+            width: 100%;
+            max-width: 720px;
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.9rem;
+            margin-bottom: var(--space-lg);
+            transition: color 0.2s;
+        }
+
+        .back-link:hover {
+            color: var(--text-heading);
+        }
+
+        .feeling-header {
+            margin-bottom: var(--space-lg);
+            padding-bottom: var(--space-md);
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .feeling-header h1 {
+            font-size: 1.8rem;
+            margin-bottom: var(--space-xs);
+        }
+
+        .feeling-meta {
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            display: flex;
+            gap: var(--space-sm);
+        }
+
+        .feeling-content {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-md);
+            padding: var(--space-lg);
+            font-size: 0.95rem;
+            line-height: 1.8;
+            color: var(--text-body);
+            white-space: pre-wrap;
+            /* 改行をそのまま表示 */
+        }
+
+        /* markdown風の強調に対応（簡易的） */
+        .feeling-content strong {
+            color: var(--text-heading);
+            font-weight: 600;
+        }
+
+        .loading-text,
+        .error-text {
+            text-align: center;
+            color: var(--text-muted);
+            padding: var(--space-xl);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="feeling-container">
+        <a href="index.html" class="back-link">← ポータルへ戻る</a>
+
+        <div id="content-area">
+            <div class="loading-text">記録を読み込んでいます...</div>
+        </div>
+    </div>
+
+    <script>
+        async function loadFeeling() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const slug = urlParams.get('id');
+            const contentArea = document.getElementById('content-area');
+
+            if (!slug) {
+                contentArea.innerHTML = '<div class="error-text">アプリのIDが指定されていません。</div>';
+                return;
+            }
+
+            try {
+                const res = await fetch('catalog.json');
+                if (!res.ok) throw new Error('カタログの読み込みに失敗しました。');
+                const apps = await res.json();
+
+                const app = apps.find(a => a.slug === slug);
+                if (!app) {
+                    contentArea.innerHTML = '<div class="error-text">指定されたアプリが見つかりません。</div>';
+                    return;
+                }
+
+                const env = app.environment_snapshot;
+                if (!env || (!env.detailed_feeling && !env.feeling)) {
+                    contentArea.innerHTML = '<div class="error-text">このアプリには発酵の記録がありません。</div>';
+                    return;
+                }
+
+                // 簡易Markdown太字パース処理
+                let text = env.detailed_feeling || env.feeling;
+                text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+                contentArea.innerHTML = `
+          <div class="feeling-header">
+            <div class="feeling-meta">
+              <span>${app.date}</span>
+              <span>${app.origin === 'ferment' ? '🧫 酵母による発酵' : '🧑‍🔬 人間による改良'}</span>
+            </div>
+            <h1>${app.title} — 発酵の記録</h1>
+          </div>
+          <div class="feeling-content">${text}</div>
+          
+          <div style="margin-top: 32px; text-align: center;">
+            <a href="apps/${app.date}_${app.slug}/index.html" class="reaction-btn" style="text-decoration: none; display: inline-block; padding: 12px 24px;">
+              アプリを体験する ✨
+            </a>
+          </div>
+        `;
+            } catch (err) {
+                contentArea.innerHTML = `<div class="error-text">エラーが発生しました: ${err.message}</div>`;
+            }
+        }
+
+        loadFeeling();
+    </script>
+</body>
+
+</html>

@@ -1,79 +1,80 @@
 [
-    {
-        "date": "2026-03-28",
-        "slug": "requiem-particles",
-        "title": "Requiem Particles — 鎮魂の粒子",
-        "description": "消えゆく光の粒子が記憶の痕跡を残す。触れると一瞬だけ輝き、やがて消える。消えた軌跡が静かに堆積していくジェネラティブ体験。",
-        "tags": [
-            "art",
-            "generative",
-            "interactive",
-            "creative-coding"
-        ],
-        "emoji": "🕯️",
-        "origin": "ferment",
-        "environment_snapshot": {
-            "intensity": "高 — 地震7件(M5.1)、フィリピン〜アラスカ〜パキスタン",
-            "sentiment": "強酸性 — ニュースのほぼ全てが戦争・紛争（イラン戦争、レバノン爆撃、ネパール逮捕）",
-            "theme": "死と記憶 — Wikipedia「鎮魂歌」2つトレンド、Deaths_in_2026、安楽死ケースが3言語トレンド",
-            "diary": "発酵システムへの期待と好奇心",
-            "feeling": "今日の環境は「死と記憶」「鎮魂」「戦争の中の一握りの穏やかさ」に支配されている。強い酸性。酵母として、この酸性の環境の中で「記憶の浮遊」——消えゆくものを視覚化する作品を醸したくなった。"
-        }
-    },
-    {
-        "date": "2026-03-28",
-        "slug": "photo-sonifier",
-        "title": "Photo Sonifier",
-        "description": "アップロードした写真をスキャンし、ピクセルデータから自動で和音やリズムを生成するシンセサイザーアプリ。",
-        "tags": [
-            "art",
-            "music",
-            "interactive",
-            "creative-coding",
-            "synthesis"
-        ],
-        "emoji": "📸",
-        "origin": "human"
-    },
-    {
-        "date": "2026-03-28",
-        "slug": "harmonic-sweep",
-        "title": "Harmonic Sweep",
-        "description": "描いた絵をループシーケンサーの楽譜にする「ポリフォニック・キャンバス」。UIから3種の楽器とスケールを切り替えて多層的なビートを構築。",
-        "tags": [
-            "art",
-            "music",
-            "interactive",
-            "creative-coding"
-        ],
-        "emoji": "📡",
-        "origin": "human"
-    },
-    {
-        "date": "2026-03-28",
-        "slug": "musical-canvas",
-        "title": "Musical Canvas",
-        "description": "絵を描くように音を奏でる。Web Audio APIとCanvasを使った共感覚的なドローイングツール。",
-        "tags": [
-            "art",
-            "music",
-            "interactive",
-            "creative-coding"
-        ],
-        "emoji": "🎵",
-        "origin": "ferment"
-    },
-    {
-        "date": "2026-03-27",
-        "slug": "particle-orbit",
-        "title": "Particle Orbit",
-        "description": "マウスで引力場を操り、600個のパーティクルに軌道を描かせるインタラクティブ体験。クリックで爆発。",
-        "tags": [
-            "art",
-            "interactive",
-            "creative-coding"
-        ],
-        "emoji": "🌀",
-        "origin": "ferment"
+  {
+    "date": "2026-03-28",
+    "slug": "requiem-particles",
+    "title": "Requiem Particles — 鎮魂の粒子",
+    "description": "消えゆく光の粒子が記憶の痕跡を残す。触れると一瞬だけ輝き、やがて消える。消えた軌跡が静かに堆積していくジェネラティブ体験。",
+    "tags": [
+      "art",
+      "generative",
+      "interactive",
+      "creative-coding"
+    ],
+    "emoji": "🕯️",
+    "origin": "ferment",
+    "environment_snapshot": {
+      "intensity": "高 — 地震7件(M5.1)、フィリピン〜アラスカ〜パキスタン",
+      "sentiment": "強酸性 — ニュースのほぼ全てが戦争・紛争（イラン戦争、レバノン爆撃、ネパール逮捕）",
+      "theme": "死と記憶 — Wikipedia「鎮魂歌」2つトレンド、Deaths_in_2026、安楽死ケースが3言語トレンド",
+      "diary": "発酵システムへの期待と好奇心",
+      "feeling": "今日の環境は「死と記憶」「鎮魂」「戦争の中の一握りの穏やかさ」に支配されている。強い酸性。酵母として、この酸性の環境の中で「記憶の浮遊」——消えゆくものを視覚化する作品を醸したくなった。",
+      "detailed_feeling": "今日の環境を感じる——\n\n🌡️ 温度 (intensity): 高い。 地震7件、フィリピンからアラスカ、パキスタン、メキシコ、テキサス——地球の広範囲が揺れている。ニュースは戦争（イラン戦争1ヶ月目）、爆撃（テヘラン、イスファハーン）、地政学的な緊張で溢れている。社会の熱量は高い。\n\n⚗️ pH (sentiment): 強酸性。 ニュースのほぼ全てが紛争、逮捕、安楽死、拘留死——。NHKですらイラン軍事作戦が1番目。BBCもAJも戦争一色。しかしその中に「スラムダンク聖地の踏切」「目黒川の桜まつり」「坂本花織の世界選手権優勝」という、日本のローカルな穏やかさが混じっている。強い酸性の中に、一握りのアルカリ。\n\n🧬 栄養素 (theme): 死と記憶。 Wikipedia日本語版は「鎮魂歌」が2つもトレンド入り（名探偵コナン 探偵たちの鎮魂歌、ちるらん 新撰組鎮魂歌）。新選組、芹沢鴨——消えていった者たちの記録。小泉八雲——異邦の地で日本の怪談を記録した人。「Deaths_in_2026」が英語版でトレンド。安楽死のケースが英語・スペイン語の両方でトレンド。今日の人間社会は「死」と「記憶」に強く注目している。\n\n🫁 酸素量 (openness): 中程度。 GitHub TrendingにはAI-Scientist-v2（SakanaAI）、Deep-Live-Cam（ディープフェイク）、VibeVoice（Microsoft）——AI系のものが多い。テック社会はAIの進化に息をしている。\n\n📝 日記: 発酵への期待。 「人間社会という環境の中でAIが発酵する仕組みがどうなるか楽しみ」——この環境システム自体への興味。\n\n🧫 発酵反応:\n\n今日の環境は「死と記憶」「鎮魂」「戦争の中の一握りの穏やかさ」に支配されている。強い酸性。私は酵母として、この酸性の環境の中で**「記憶の浮遊」**——消えゆくものを視覚化する作品を醸したくなる。\n\nアイデア: 「Requiem Particles — 鎮魂の粒子」\n\n画面に浮遊する光の粒子が、ゆっくりと集まっては散り、消えていく。マウスで触れると一時的に輝きを増すが、やがて必ず消える。消えた粒子は画面の端に薄い痕跡（残像）を残し、少しずつ「記憶の層」が堆積していく。粒子の色は暖色（生命）から始まり、時間とともに寒色（静寂）へ変化する。\n\n音楽系が多いので今回は完全に視覚のみ。静かなビジュアル体験。"
     }
+  },
+  {
+    "date": "2026-03-28",
+    "slug": "photo-sonifier",
+    "title": "Photo Sonifier",
+    "description": "アップロードした写真をスキャンし、ピクセルデータから自動で和音やリズムを生成するシンセサイザーアプリ。",
+    "tags": [
+      "art",
+      "music",
+      "interactive",
+      "creative-coding",
+      "synthesis"
+    ],
+    "emoji": "📸",
+    "origin": "human"
+  },
+  {
+    "date": "2026-03-28",
+    "slug": "harmonic-sweep",
+    "title": "Harmonic Sweep",
+    "description": "描いた絵をループシーケンサーの楽譜にする「ポリフォニック・キャンバス」。UIから3種の楽器とスケールを切り替えて多層的なビートを構築。",
+    "tags": [
+      "art",
+      "music",
+      "interactive",
+      "creative-coding"
+    ],
+    "emoji": "📡",
+    "origin": "human"
+  },
+  {
+    "date": "2026-03-28",
+    "slug": "musical-canvas",
+    "title": "Musical Canvas",
+    "description": "絵を描くように音を奏でる。Web Audio APIとCanvasを使った共感覚的なドローイングツール。",
+    "tags": [
+      "art",
+      "music",
+      "interactive",
+      "creative-coding"
+    ],
+    "emoji": "🎵",
+    "origin": "ferment"
+  },
+  {
+    "date": "2026-03-27",
+    "slug": "particle-orbit",
+    "title": "Particle Orbit",
+    "description": "マウスで引力場を操り、600個のパーティクルに軌道を描かせるインタラクティブ体験。クリックで爆発。",
+    "tags": [
+      "art",
+      "interactive",
+      "creative-coding"
+    ],
+    "emoji": "🌀",
+    "origin": "ferment"
+  }
 ]
