@@ -74,7 +74,8 @@ bash /Users/sugimotoyuuki/.gemini/antigravity/scratch/daily-ferment/scripts/sens
     "intensity": "環境温度の要約（例: 高 — 為替変動大）",
     "sentiment": "環境pHの要約（例: やや酸性 — 紛争関連のニュースが多い）",
     "theme": "栄養素の要約（例: Wikipediaで○○がトレンド）",
-    "diary": "日記の要約（あれば）"
+    "diary": "日記の要約（あれば）",
+    "feeling": "ステップ4における「酵母の感覚」のプロセスをここに1-2文で記録する（例: 『強酸性のニュースと、桜の開花の話題が混ざる不思議な環境。私はここで、儚く散るような視覚体験を醸したくなった。』）"
   }
 }
 ```

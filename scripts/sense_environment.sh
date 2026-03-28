@@ -12,11 +12,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 ENV_DIR="$PROJECT_DIR/environment"
-OUTPUT="$ENV_DIR/today.json"
+OUTPUT="/tmp/ferment_today.json"
+FINAL_OUTPUT="$ENV_DIR/today.json"
 DIARY_FILE="$PROJECT_DIR/ferment_diary.md"
 FEEDBACK_FILE="$PROJECT_DIR/feedback.json"
 
-mkdir -p "$ENV_DIR"
+mkdir -p "$ENV_DIR" 2>/dev/null || true
 
 DATE=$(date +%Y-%m-%d)
 TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -37,7 +38,7 @@ echo "📡 環境センシング開始: $DATE"
 echo "========================================"
 
 # ----- Temporary files -----
-TMP_DIR="$ENV_DIR/.tmp"
+TMP_DIR="$PROJECT_DIR/.ferment_tmp"
 mkdir -p "$TMP_DIR"
 trap "rm -rf $TMP_DIR" EXIT
 
@@ -250,6 +251,9 @@ jq -n \
   diary: (if $diary == "" then null else $diary end),
   feedback: $feedback
 }' > "$OUTPUT"
+
+# Copy to project dir (may fail if permissions issue, that's ok)
+cp "$OUTPUT" "$FINAL_OUTPUT" 2>/dev/null || true
 
 echo "========================================"
 echo "✅ 環境センシング完了: $OUTPUT"
