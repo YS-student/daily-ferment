@@ -11,7 +11,8 @@
             "creative-coding",
             "synthesis"
         ],
-        "emoji": "📸"
+        "emoji": "📸",
+        "origin": "human"
     },
     {
         "date": "2026-03-28",
@@ -24,7 +25,8 @@
             "interactive",
             "creative-coding"
         ],
-        "emoji": "📡"
+        "emoji": "📡",
+        "origin": "human"
     },
     {
         "date": "2026-03-28",
@@ -37,7 +39,8 @@
             "interactive",
             "creative-coding"
         ],
-        "emoji": "🎵"
+        "emoji": "🎵",
+        "origin": "ferment"
     },
     {
         "date": "2026-03-27",
@@ -49,6 +52,7 @@
             "interactive",
             "creative-coding"
         ],
-        "emoji": "🌀"
+        "emoji": "🌀",
+        "origin": "ferment"
     }
 ]

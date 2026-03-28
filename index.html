@@ -1,13 +1,16 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Daily Ferment — 毎日醸すWebアプリ</title>
   <meta name="description" content="AIが毎日生成する小さなWebアプリのコレクション。アート、ツール、ゲーム、実験的なインタラクション。">
   <link rel="stylesheet" href="style.css">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧪</text></svg>">
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧪</text></svg>">
 </head>
+
 <body>
   <div class="noise-overlay"></div>
 
@@ -41,8 +44,33 @@
     <!-- Filter Tags -->
     <div class="filters" id="filters"></div>
 
-    <!-- App Grid -->
-    <main class="grid" id="app-grid"></main>
+    <!-- ===== Section: 発酵 (AI Autonomous) ===== -->
+    <section class="origin-section" id="section-ferment">
+      <div class="section-header">
+        <div class="section-header__icon section-header__icon--ferment">🧫</div>
+        <div>
+          <h2 class="section-header__title section-header__title--ferment">発酵 <span class="section-header__en">—
+              Fermented</span></h2>
+          <p class="section-header__desc">AIが自律的に醸し出した作品。毎日の /ferment ワークフローから生まれたもの。</p>
+        </div>
+        <span class="section-header__count" id="count-ferment">0</span>
+      </div>
+      <div class="grid" id="grid-ferment"></div>
+    </section>
+
+    <!-- ===== Section: 人間による改良 (Human-directed) ===== -->
+    <section class="origin-section" id="section-human">
+      <div class="section-header">
+        <div class="section-header__icon section-header__icon--human">🧑‍🔬</div>
+        <div>
+          <h2 class="section-header__title section-header__title--human">人間による改良 <span class="section-header__en">—
+              Human-Evolved</span></h2>
+          <p class="section-header__desc">人間の発想をもとにAIが発展させた作品。発酵物の進化形。</p>
+        </div>
+        <span class="section-header__count" id="count-human">0</span>
+      </div>
+      <div class="grid" id="grid-human"></div>
+    </section>
 
     <!-- Empty State -->
     <div class="empty-state" id="empty-state" style="display: none;">
@@ -78,7 +106,6 @@
     function updateStats() {
       document.getElementById('stats-total').textContent = catalog.length;
 
-      // Calculate streak
       if (catalog.length === 0) {
         document.getElementById('stats-streak').textContent = '0';
         document.getElementById('stats-latest').textContent = '—';
@@ -86,12 +113,9 @@
       }
 
       const sorted = [...catalog].sort((a, b) => b.date.localeCompare(a.date));
-      document.getElementById('stats-latest').textContent = sorted[0].date.slice(5); // MM-DD
+      document.getElementById('stats-latest').textContent = sorted[0].date.slice(5);
 
       let streak = 1;
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
       for (let i = 0; i < sorted.length - 1; i++) {
         const curr = new Date(sorted[i].date);
         const prev = new Date(sorted[i + 1].date);
@@ -137,34 +161,58 @@
     }
 
     function renderGrid() {
-      const grid = document.getElementById('app-grid');
       const empty = document.getElementById('empty-state');
 
       const filtered = activeFilter === 'all'
         ? catalog
         : catalog.filter(app => (app.tags || []).includes(activeFilter));
 
-      // Sort newest first
       const sorted = [...filtered].sort((a, b) => b.date.localeCompare(a.date));
 
       if (sorted.length === 0) {
-        grid.innerHTML = '';
-        grid.style.display = 'none';
+        document.getElementById('grid-ferment').innerHTML = '';
+        document.getElementById('grid-human').innerHTML = '';
+        document.getElementById('section-ferment').style.display = 'none';
+        document.getElementById('section-human').style.display = 'none';
         empty.style.display = 'block';
         return;
       }
 
       empty.style.display = 'none';
+
+      // Split by origin
+      const fermentApps = sorted.filter(app => app.origin !== 'human');
+      const humanApps = sorted.filter(app => app.origin === 'human');
+
+      renderSection('grid-ferment', 'section-ferment', 'count-ferment', fermentApps);
+      renderSection('grid-human', 'section-human', 'count-human', humanApps);
+    }
+
+    function renderSection(gridId, sectionId, countId, apps) {
+      const grid = document.getElementById(gridId);
+      const section = document.getElementById(sectionId);
+      const count = document.getElementById(countId);
+
+      if (apps.length === 0) {
+        section.style.display = 'none';
+        return;
+      }
+
+      section.style.display = 'block';
+      count.textContent = apps.length;
       grid.style.display = 'grid';
 
-      grid.innerHTML = sorted.map((app, i) => `
+      grid.innerHTML = apps.map((app, i) => `
         <a class="card" href="apps/${app.date}_${app.slug}/index.html" target="_blank">
           <div class="card__preview ${GRADIENTS[i % GRADIENTS.length]}">
             <div class="card__preview-bg"></div>
             <span>${app.emoji || '🧪'}</span>
           </div>
           <div class="card__body">
-            <div class="card__date">${app.date}</div>
+            <div class="card__meta">
+              <span class="card__date">${app.date}</span>
+              <span class="card__origin-badge card__origin-badge--${app.origin || 'ferment'}">${app.origin === 'human' ? '🧑‍🔬 Human' : '🧫 Ferment'}</span>
+            </div>
             <h2 class="card__title">${app.title}</h2>
             <p class="card__description">${app.description}</p>
             <div class="card__tags">
@@ -178,4 +226,5 @@
     init();
   </script>
 </body>
+
 </html>
