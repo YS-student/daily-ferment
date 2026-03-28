@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Requiem Particles — 鎮魂の粒子</title>
+    <meta name="description" content="消えゆく光の粒子が記憶の痕跡を残すジェネラティブ・ビジュアル体験。触れたものはやがて消え、その軌跡だけが堆積していく。">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@200;300&family=Inter:wght@200;300&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #05050a;
+            overflow: hidden;
+            cursor: none;
+            font-family: 'Inter', 'Noto Serif JP', serif;
+        }
+
+        canvas {
+            display: block;
+            position: fixed;
+            top: 0;
+            left: 0;
+        }
+
+        #memory-canvas {
+            z-index: 1;
+        }
+
+        #particle-canvas {
+            z-index: 2;
+        }
+
+        #cursor-glow {
+            position: fixed;
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 3;
+            transform: translate(-50%, -50%);
+            background: radial-gradient(circle, rgba(255, 200, 150, 0.08) 0%, transparent 70%);
+            transition: opacity 0.3s;
+            opacity: 0;
+        }
+
+        #ui-overlay {
+            position: fixed;
+            z-index: 10;
+            bottom: 32px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 1.5s ease;
+        }
+
+        #ui-overlay.visible {
+            opacity: 1;
+        }
+
+        .title {
+            font-family: 'Noto Serif JP', serif;
+            font-weight: 200;
+            font-size: clamp(0.85rem, 2vw, 1.1rem);
+            color: rgba(200, 180, 160, 0.4);
+            letter-spacing: 0.3em;
+            margin-bottom: 6px;
+        }
+
+        .subtitle {
+            font-weight: 200;
+            font-size: 0.65rem;
+            color: rgba(200, 180, 160, 0.2);
+            letter-spacing: 0.15em;
+        }
+
+        #counter {
+            position: fixed;
+            top: 24px;
+            right: 28px;
+            z-index: 10;
+            font-family: 'Inter', monospace;
+            font-weight: 200;
+            font-size: 0.7rem;
+            color: rgba(200, 180, 160, 0.15);
+            letter-spacing: 0.1em;
+            pointer-events: none;
+        }
+
+        #elapsed {
+            position: fixed;
+            top: 24px;
+            left: 28px;
+            z-index: 10;
+            font-family: 'Inter', monospace;
+            font-weight: 200;
+            font-size: 0.7rem;
+            color: rgba(200, 180, 160, 0.15);
+            letter-spacing: 0.1em;
+            pointer-events: none;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="memory-canvas"></canvas>
+    <canvas id="particle-canvas"></canvas>
+    <div id="cursor-glow"></div>
+    <div id="ui-overlay">
+        <div class="title">鎮 魂 の 粒 子</div>
+        <div class="subtitle">requiem particles</div>
+    </div>
+    <div id="counter">departed: <span id="departed-count">0</span></div>
+    <div id="elapsed"></div>
+
+    <script>
+        // === Configuration ===
+        const CONFIG = {
+            MAX_PARTICLES: 200,
+            SPAWN_RATE: 0.4,
+            BASE_LIFETIME: 600,    // frames (~10 seconds)
+            LIFETIME_VAR: 400,
+            DRIFT_SPEED: 0.15,
+            MEMORY_FADE: 0.003,
+            TOUCH_RADIUS: 80,
+            TOUCH_BOOST: 1.8,
+            MEMORY_OPACITY: 0.12,
+        };
+
+        // === State ===
+        const particles = [];
+        let mouseX = -200, mouseY = -200;
+        let mouseActive = false;
+        let departedCount = 0;
+        let startTime = Date.now();
+        let globalHue = 30; // warm -> cool over time
+        const dpr = window.devicePixelRatio || 1;
+
+        // === Canvas Setup ===
+        const memCanvas = document.getElementById('memory-canvas');
+        const memCtx = memCanvas.getContext('2d');
+        const partCanvas = document.getElementById('particle-canvas');
+        const partCtx = partCanvas.getContext('2d');
+        const cursorGlow = document.getElementById('cursor-glow');
+        const departedEl = document.getElementById('departed-count');
+        const elapsedEl = document.getElementById('elapsed');
+
+        function resize() {
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+            [memCanvas, partCanvas].forEach(c => {
+                c.width = w * dpr;
+                c.height = h * dpr;
+                c.style.width = w + 'px';
+                c.style.height = h + 'px';
+            });
+            memCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            partCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        }
+        resize();
+        window.addEventListener('resize', resize);
+
+        // Reveal title after a moment
+        setTimeout(() => {
+            document.getElementById('ui-overlay').classList.add('visible');
+        }, 2000);
+
+        // === Mouse ===
+        document.addEventListener('mousemove', e => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+            mouseActive = true;
+            cursorGlow.style.left = mouseX + 'px';
+            cursorGlow.style.top = mouseY + 'px';
+            cursorGlow.style.opacity = '1';
+        });
+        document.addEventListener('mouseleave', () => {
+            mouseActive = false;
+            cursorGlow.style.opacity = '0';
+        });
+
+        // === Touch ===
+        document.addEventListener('touchmove', e => {
+            e.preventDefault();
+            const t = e.touches[0];
+            mouseX = t.clientX;
+            mouseY = t.clientY;
+            mouseActive = true;
+        }, { passive: false });
+        document.addEventListener('touchend', () => {
+            mouseActive = false;
+        });
+
+        // === Particle Class ===
+        class Particle {
+            constructor() {
+                this.reset();
+            }
+
+            reset() {
+                const w = window.innerWidth;
+                const h = window.innerHeight;
+
+                // Spawn from edges or random
+                const edge = Math.random();
+                if (edge < 0.25) {
+                    this.x = Math.random() * w;
+                    this.y = -10;
+                } else if (edge < 0.5) {
+                    this.x = Math.random() * w;
+                    this.y = h + 10;
+                } else if (edge < 0.75) {
+                    this.x = -10;
+                    this.y = Math.random() * h;
+                } else {
+                    this.x = w + 10;
+                    this.y = Math.random() * h;
+                }
+
+                // Drift toward center-ish
+                const cx = w * (0.3 + Math.random() * 0.4);
+                const cy = h * (0.3 + Math.random() * 0.4);
+                const angle = Math.atan2(cy - this.y, cx - this.x) + (Math.random() - 0.5) * 1.2;
+                const speed = CONFIG.DRIFT_SPEED * (0.5 + Math.random());
+
+                this.vx = Math.cos(angle) * speed;
+                this.vy = Math.sin(angle) * speed;
+
+                this.lifetime = CONFIG.BASE_LIFETIME + Math.random() * CONFIG.LIFETIME_VAR;
+                this.age = 0;
+                this.maxAge = this.lifetime;
+
+                // Color: warm at birth, cool with global progression
+                const hue = globalHue + (Math.random() - 0.5) * 20;
+                this.baseHue = hue;
+                this.saturation = 40 + Math.random() * 30;
+                this.lightness = 60 + Math.random() * 20;
+
+                this.size = 1 + Math.random() * 2.5;
+                this.touched = false;
+                this.touchGlow = 0;
+
+                // Memory trail
+                this.trail = [];
+                this.alive = true;
+            }
+
+            update() {
+                this.age++;
+
+                // Drift with subtle noise
+                const noiseX = Math.sin(this.age * 0.01 + this.x * 0.005) * 0.03;
+                const noiseY = Math.cos(this.age * 0.013 + this.y * 0.005) * 0.03;
+
+                this.x += this.vx + noiseX;
+                this.y += this.vy + noiseY;
+
+                // Mouse interaction
+                if (mouseActive) {
+                    const dx = mouseX - this.x;
+                    const dy = mouseY - this.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    if (dist < CONFIG.TOUCH_RADIUS) {
+                        if (!this.touched) {
+                            this.touched = true;
+                            this.touchGlow = 1;
+                            // Touching briefly revives — extends life by a tiny bit
+                            this.lifetime += 30;
+                        }
+                        // Gentle attraction
+                        this.vx += dx / dist * 0.01;
+                        this.vy += dy / dist * 0.01;
+                    }
+                }
+
+                if (this.touchGlow > 0) {
+                    this.touchGlow *= 0.98;
+                }
+
+                // Record trail for memory
+                if (this.age % 4 === 0) {
+                    this.trail.push({ x: this.x, y: this.y, hue: this.currentHue(), alpha: this.currentAlpha() });
+                }
+
+                // Death
+                if (this.age >= this.lifetime) {
+                    this.alive = false;
+                    departedCount++;
+                    departedEl.textContent = departedCount;
+                    this.depositMemory();
+                }
+            }
+
+            currentAlpha() {
+                const lifeRatio = this.age / this.lifetime;
+                // Fade in, hold, fade out
+                if (lifeRatio < 0.1) return lifeRatio / 0.1;
+                if (lifeRatio > 0.7) return 1 - (lifeRatio - 0.7) / 0.3;
+                return 1;
+            }
+
+            currentHue() {
+                // Shift from warm to cool as particle ages
+                return this.baseHue + (this.age / this.lifetime) * 180;
+            }
+
+            depositMemory() {
+                // When a particle dies, leave its trail as a permanent memory on the memory canvas
+                if (this.trail.length < 2) return;
+
+                memCtx.save();
+                memCtx.lineCap = 'round';
+                memCtx.lineJoin = 'round';
+
+                for (let i = 1; i < this.trail.length; i++) {
+                    const p0 = this.trail[i - 1];
+                    const p1 = this.trail[i];
+                    const alpha = CONFIG.MEMORY_OPACITY * p1.alpha * 0.5;
+
+                    memCtx.beginPath();
+                    memCtx.moveTo(p0.x, p0.y);
+                    memCtx.lineTo(p1.x, p1.y);
+                    memCtx.strokeStyle = `hsla(${p1.hue}, 30%, 50%, ${alpha})`;
+                    memCtx.lineWidth = this.size * 0.8;
+                    memCtx.stroke();
+                }
+
+                // Leave a small glow at the death point
+                const last = this.trail[this.trail.length - 1];
+                const grd = memCtx.createRadialGradient(last.x, last.y, 0, last.x, last.y, this.size * 4);
+                grd.addColorStop(0, `hsla(${last.hue}, 25%, 45%, ${CONFIG.MEMORY_OPACITY * 0.6})`);
+                grd.addColorStop(1, 'transparent');
+                memCtx.fillStyle = grd;
+                memCtx.beginPath();
+                memCtx.arc(last.x, last.y, this.size * 4, 0, Math.PI * 2);
+                memCtx.fill();
+
+                memCtx.restore();
+            }
+
+            draw(ctx) {
+                const alpha = this.currentAlpha();
+                const hue = this.currentHue();
+                const glow = this.touchGlow;
+                const size = this.size * (1 + glow * CONFIG.TOUCH_BOOST);
+                const lightness = this.lightness + glow * 20;
+
+                // Outer glow
+                const outerSize = size * 3;
+                const grd = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, outerSize);
+                grd.addColorStop(0, `hsla(${hue}, ${this.saturation}%, ${lightness}%, ${alpha * 0.3 * (1 + glow)})`);
+                grd.addColorStop(0.5, `hsla(${hue}, ${this.saturation}%, ${lightness}%, ${alpha * 0.08})`);
+                grd.addColorStop(1, 'transparent');
+                ctx.fillStyle = grd;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, outerSize, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Core
+                ctx.fillStyle = `hsla(${hue}, ${this.saturation}%, ${lightness + 15}%, ${alpha * 0.8 * (1 + glow * 0.5)})`;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // === Spawn initial particles ===
+        for (let i = 0; i < 50; i++) {
+            const p = new Particle();
+            p.x = Math.random() * window.innerWidth;
+            p.y = Math.random() * window.innerHeight;
+            particles.push(p);
+        }
+
+        // === Animation Loop ===
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+
+            // Shift global hue over time (warm → cool, 30 → 210 over ~30 minutes)
+            const elapsed = (Date.now() - startTime) / 1000;
+            globalHue = 30 + Math.min(elapsed / 1800, 1) * 180;
+
+            // Update elapsed display
+            const mins = Math.floor(elapsed / 60);
+            const secs = Math.floor(elapsed % 60);
+            elapsedEl.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+            // Slowly fade memory layer (very slowly, to accumulate)
+            memCtx.save();
+            memCtx.globalCompositeOperation = 'destination-out';
+            memCtx.fillStyle = `rgba(0, 0, 0, ${CONFIG.MEMORY_FADE})`;
+            memCtx.fillRect(0, 0, w, h);
+            memCtx.restore();
+
+            // Clear particle layer
+            partCtx.clearRect(0, 0, w, h);
+
+            // Spawn new particles
+            if (particles.length < CONFIG.MAX_PARTICLES && Math.random() < CONFIG.SPAWN_RATE) {
+                particles.push(new Particle());
+            }
+
+            // Update and draw
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.update();
+
+                if (!p.alive) {
+                    particles.splice(i, 1);
+                    continue;
+                }
+
+                // Cull off-screen particles
+                if (p.x < -50 || p.x > w + 50 || p.y < -50 || p.y > h + 50) {
+                    p.depositMemory();
+                    particles.splice(i, 1);
+                    departedCount++;
+                    departedEl.textContent = departedCount;
+                    continue;
+                }
+
+                p.draw(partCtx);
+            }
+
+            // Draw faint connections between nearby particles
+            partCtx.save();
+            for (let i = 0; i < particles.length; i++) {
+                for (let j = i + 1; j < particles.length; j++) {
+                    const a = particles[i];
+                    const b = particles[j];
+                    const dx = a.x - b.x;
+                    const dy = a.y - b.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    if (dist < 80) {
+                        const alpha = (1 - dist / 80) * 0.04 * a.currentAlpha() * b.currentAlpha();
+                        partCtx.beginPath();
+                        partCtx.moveTo(a.x, a.y);
+                        partCtx.lineTo(b.x, b.y);
+                        partCtx.strokeStyle = `hsla(${(a.currentHue() + b.currentHue()) / 2}, 20%, 50%, ${alpha})`;
+                        partCtx.lineWidth = 0.5;
+                        partCtx.stroke();
+                    }
+                }
+            }
+            partCtx.restore();
+        }
+
+        animate();
+    </script>
+</body>
+
+</html>

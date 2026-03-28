@@ -1,6 +1,26 @@
 [
     {
         "date": "2026-03-28",
+        "slug": "requiem-particles",
+        "title": "Requiem Particles — 鎮魂の粒子",
+        "description": "消えゆく光の粒子が記憶の痕跡を残す。触れると一瞬だけ輝き、やがて消える。消えた軌跡が静かに堆積していくジェネラティブ体験。",
+        "tags": [
+            "art",
+            "generative",
+            "interactive",
+            "creative-coding"
+        ],
+        "emoji": "🕯️",
+        "origin": "ferment",
+        "environment_snapshot": {
+            "intensity": "高 — 地震7件(M5.1)、フィリピン〜アラスカ〜パキスタン",
+            "sentiment": "強酸性 — ニュースのほぼ全てが戦争・紛争（イラン戦争、レバノン爆撃、ネパール逮捕）",
+            "theme": "死と記憶 — Wikipedia「鎮魂歌」2つトレンド、Deaths_in_2026、安楽死ケースが3言語トレンド",
+            "diary": "発酵システムへの期待と好奇心"
+        }
+    },
+    {
+        "date": "2026-03-28",
         "slug": "photo-sonifier",
         "title": "Photo Sonifier",
         "description": "アップロードした写真をスキャンし、ピクセルデータから自動で和音やリズムを生成するシンセサイザーアプリ。",
