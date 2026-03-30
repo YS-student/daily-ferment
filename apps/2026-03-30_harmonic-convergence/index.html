@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Harmonic Convergence</title>
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #030105;
+      font-family: 'Inter', -apple-system, sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+    }
+    
+    #canvas-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      background: radial-gradient(circle at center, #1a0515 0%, #030105 100%);
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      mix-blend-mode: screen;
+    }
+
+    #ui-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      pointer-events: none;
+      transition: opacity 2s ease-in-out, transform 2s ease-out;
+      color: rgba(255, 230, 240, 0.8);
+    }
+
+    .hidden {
+      opacity: 0 !important;
+      transform: scale(1.05);
+    }
+
+    h1 {
+      font-weight: 200;
+      letter-spacing: 0.4em;
+      margin: 0 0 10px 0;
+      text-transform: uppercase;
+      font-size: 1.5rem;
+      text-align: center;
+      text-shadow: 0 0 20px rgba(200, 50, 100, 0.5);
+    }
+
+    p {
+      font-weight: 300;
+      letter-spacing: 0.2em;
+      font-size: 0.8rem;
+      opacity: 0.6;
+      margin: 0;
+    }
+
+    #back-btn {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      z-index: 20;
+      color: rgba(255,255,255,0.4);
+      text-decoration: none;
+      font-size: 0.8rem;
+      letter-spacing: 0.1em;
+      transition: color 0.3s;
+      border: 1px solid rgba(255,255,255,0.1);
+      padding: 8px 16px;
+      border-radius: 4px;
+    }
+    #back-btn:hover {
+      color: rgba(255,255,255,0.8);
+      border-color: rgba(255,255,255,0.4);
+    }
+  </style>
+</head>
+<body>
+  <a id="back-btn" href="../../index.html">← PORTAL</a>
+  
+  <div id="canvas-container">
+    <canvas id="canvas"></canvas>
+  </div>
+  
+  <div id="ui-layer">
+    <h1>Harmonic Convergence</h1>
+    <p>Click and hold to restore harmony</p>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d', { alpha: false });
+    const uiLayer = document.getElementById('ui-layer');
+
+    let width, height;
+    let particles = [];
+    const NUM_PARTICLES = 300;
+    
+    let isInteracting = false;
+    let interactionProgress = 0; // 0 = chaos, 1 = harmony
+    let mouse = { x: 0, y: 0 };
+    let hasStarted = false;
+
+    // --- Audio System ---
+    let audioCtx;
+    let masterGain;
+    let noiseGain;
+    let synthGain;
+    let synths = [];
+
+    function initAudio() {
+      if (audioCtx) return;
+      
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      audioCtx = new AudioContext();
+      
+      masterGain = audioCtx.createGain();
+      masterGain.gain.value = 0; // start muted
+      masterGain.connect(audioCtx.destination);
+      
+      // Noise system (Chaos)
+      noiseGain = audioCtx.createGain();
+      noiseGain.connect(masterGain);
+      
+      const bufferSize = audioCtx.sampleRate * 2;
+      const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+      const output = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        output[i] = Math.random() * 2 - 1;
+      }
+      
+      const noiseSource = audioCtx.createBufferSource();
+      noiseSource.buffer = noiseBuffer;
+      noiseSource.loop = true;
+      
+      const filter = audioCtx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 150; // Deep rumble
+      filter.Q.value = 1;
+      
+      noiseSource.connect(filter);
+      filter.connect(noiseGain);
+      noiseSource.start();
+      
+      // Synth System (Harmony - Drone Chord)
+      synthGain = audioCtx.createGain();
+      synthGain.gain.value = 0;
+      synthGain.connect(masterGain);
+      
+      // Root: D2, 3rd: F#3, 5th: A3, 7th: C#4, 9th: E4 (Dmaj9 chord)
+      const frequencies = [73.42, 185.00, 220.00, 277.18, 329.63]; 
+      
+      frequencies.forEach((freq, i) => {
+        const osc = audioCtx.createOscillator();
+        osc.type = 'sine';
+        // Add slight detune for richness
+        osc.frequency.value = freq + (Math.random() * 2 - 1);
+        
+        const oscGain = audioCtx.createGain();
+        oscGain.gain.value = 0.15;
+        
+        // Add slow LFO to volume for "breathing" choir effect
+        const lfo = audioCtx.createOscillator();
+        lfo.type = 'sine';
+        lfo.frequency.value = 0.1 + Math.random() * 0.1;
+        
+        const lfoGain = audioCtx.createGain();
+        lfoGain.gain.value = 0.05;
+        
+        lfo.connect(lfoGain);
+        lfoGain.connect(oscGain.gain);
+        lfo.start();
+        
+        osc.connect(oscGain);
+        oscGain.connect(synthGain);
+        osc.start();
+      });
+      
+      // Fade in master
+      masterGain.gain.setTargetAtTime(0.8, audioCtx.currentTime, 2.0);
+    }
+
+    function updateAudio() {
+      if (!audioCtx) return;
+      
+      // Noise decreases as harmony increases
+      const nV = Math.max(0, 1.0 - interactionProgress * 1.5);
+      noiseGain.gain.setTargetAtTime(nV * 0.3, audioCtx.currentTime, 0.1);
+      
+      // Synth increases as harmony increases
+      const sV = Math.pow(interactionProgress, 2); // Exponential easing
+      synthGain.gain.setTargetAtTime(sV * 1.0, audioCtx.currentTime, 0.1);
+    }
+
+    // --- Visual System ---
+    class Particle {
+      constructor() {
+        this.reset();
+        this.y = Math.random() * height; // initial random spread
+      }
+      
+      reset() {
+        this.x = Math.random() * width;
+        this.y = Math.random() * height;
+        this.vx = (Math.random() * 2 - 1) * 2;
+        this.vy = (Math.random() * 2 - 1) * 2;
+        this.radius = Math.random() * 1.5 + 0.5;
+        // Base chaos color: acid magenta/red
+        this.baseHue = 320 + Math.random() * 40; 
+        
+        this.angle = Math.random() * Math.PI * 2;
+        this.orbitRadius = 50 + Math.random() * 300;
+        this.orbitSpeed = (Math.random() > 0.5 ? 1 : -1) * (0.01 + Math.random() * 0.02);
+      }
+      
+      update() {
+        if (interactionProgress === 0) {
+          // Chaos mode: Brownian motion
+          this.vx += (Math.random() * 2 - 1) * 0.2;
+          this.vy += (Math.random() * 2 - 1) * 0.2;
+          
+          // Friction
+          this.vx *= 0.98;
+          this.vy *= 0.98;
+          
+        } else {
+          // Target position based on orbit
+          this.angle += this.orbitSpeed;
+          // Slowly contract orbit based on interaction
+          const currentOrbitRadius = this.orbitRadius * (1.5 - interactionProgress * 0.5);
+          
+          const targetX = mouse.x + Math.cos(this.angle) * currentOrbitRadius;
+          const targetY = mouse.y + Math.sin(this.angle) * currentOrbitRadius;
+          
+          // Force towards target
+          const dx = targetX - this.x;
+          const dy = targetY - this.y;
+          
+          // Attraction strength increases with interaction
+          const force = 0.02 * interactionProgress;
+          this.vx += dx * force;
+          this.vy += dy * force;
+          
+          // Higher friction to stabilize orbits
+          this.vx *= (0.98 - interactionProgress * 0.05);
+          this.vy *= (0.98 - interactionProgress * 0.05);
+        }
+        
+        this.x += this.vx;
+        this.y += this.vy;
+        
+        // Wrapping in chaos mode, soft boundaries in harmony mode
+        if (interactionProgress < 0.5) {
+          if (this.x < 0) this.x = width;
+          if (this.x > width) this.x = 0;
+          if (this.y < 0) this.y = height;
+          if (this.y > height) this.y = 0;
+        }
+      }
+      
+      draw() {
+        // Interpolate hue from acid red (320-360) to golden (40-50)
+        let targetHue = 45; 
+        let hueDiff = targetHue - this.baseHue;
+        // To handle wrapping
+        if (hueDiff < -180) hueDiff += 360;
+        if (hueDiff > 180) hueDiff -= 360;
+        
+        const currentHue = this.baseHue + hueDiff * interactionProgress;
+        const sat = 80 + interactionProgress * 20; // 80% to 100%
+        const lit = 50 + interactionProgress * 20; // 50% to 70%
+        
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius + (interactionProgress * 1.0), 0, Math.PI * 2);
+        ctx.fillStyle = `hsl(${currentHue}, ${sat}%, ${lit}%)`;
+        
+        // Add glow during harmony
+        if (interactionProgress > 0.1) {
+          ctx.shadowBlur = 10 * interactionProgress;
+          ctx.shadowColor = `hsl(${currentHue}, ${sat}%, ${lit}%)`;
+        } else {
+          ctx.shadowBlur = 0;
+        }
+        
+        ctx.fill();
+      }
+    }
+
+    function resize() {
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+    }
+
+    function startInteraction(e) {
+      if (!hasStarted) {
+        hasStarted = true;
+        uiLayer.classList.add('hidden');
+        initAudio();
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      isInteracting = true;
+      updateMousePos(e);
+    }
+
+    function endInteraction() {
+      isInteracting = false;
+    }
+
+    function updateMousePos(e) {
+      if (e.touches && e.touches.length > 0) {
+        mouse.x = e.touches[0].clientX;
+        mouse.y = e.touches[0].clientY;
+      } else {
+        mouse.x = e.clientX;
+        mouse.y = e.clientY;
+      }
+    }
+
+    // --- Initialization & Loop ---
+    window.addEventListener('resize', resize);
+    
+    // Desktop events
+    window.addEventListener('mousedown', startInteraction);
+    window.addEventListener('mouseup', endInteraction);
+    window.addEventListener('mousemove', (e) => { 
+      if(isInteracting) updateMousePos(e); 
+    });
+    
+    // Touch events
+    window.addEventListener('touchstart', startInteraction, {passive: false});
+    window.addEventListener('touchend', endInteraction);
+    window.addEventListener('touchmove', (e) => { 
+      if(isInteracting) updateMousePos(e); 
+    }, {passive: false});
+
+    resize();
+
+    // Create particles
+    for (let i = 0; i < NUM_PARTICLES; i++) {
+        particles.push(new Particle());
+    }
+
+    function animate() {
+      // Transition logic
+      if (isInteracting) {
+        interactionProgress += 0.01;
+        if (interactionProgress > 1) interactionProgress = 1;
+      } else {
+        interactionProgress -= 0.005;
+        if (interactionProgress < 0) interactionProgress = 0;
+      }
+      
+      updateAudio();
+
+      // Clear with trail effect
+      ctx.fillStyle = `rgba(3, 1, 5, ${isInteracting ? 0.3 : 0.1})`;
+      ctx.fillRect(0, 0, width, height);
+      
+      // Optional: global composition
+      ctx.globalCompositeOperation = interactionProgress > 0.5 ? 'lighter' : 'source-over';
+
+      particles.forEach(p => {
+        p.update();
+        p.draw();
+      });
+
+      requestAnimationFrame(animate);
+    }
+
+    animate();
+  </script>
+</body>
+</html>
