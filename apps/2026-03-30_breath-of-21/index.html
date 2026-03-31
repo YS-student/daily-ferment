@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Breath of 21</title>
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #030101;
+      font-family: 'Inter', -apple-system, sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    #canvas-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    #ui-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      pointer-events: none;
+      transition: opacity 2s ease-in-out, transform 2s ease-out;
+      color: rgba(255, 255, 255, 0.8);
+      background: radial-gradient(circle at center, rgba(0,0,0,0) 0%, rgba(5,2,2,0.8) 100%);
+    }
+
+    .hidden {
+      opacity: 0 !important;
+      transform: scale(1.05);
+    }
+
+    h1 {
+      font-weight: 200;
+      letter-spacing: 0.4em;
+      margin: 0 0 10px 0;
+      text-transform: uppercase;
+      font-size: 1.5rem;
+      text-align: center;
+      text-shadow: 0 0 20px rgba(100, 200, 255, 0.5);
+    }
+
+    p {
+      font-weight: 300;
+      letter-spacing: 0.2em;
+      font-size: 0.8rem;
+      opacity: 0.6;
+      margin: 0;
+    }
+
+    #back-btn {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      z-index: 20;
+      color: rgba(255,255,255,0.4);
+      text-decoration: none;
+      font-size: 0.8rem;
+      letter-spacing: 0.1em;
+      transition: color 0.3s;
+      border: 1px solid rgba(255,255,255,0.1);
+      padding: 8px 16px;
+      border-radius: 4px;
+      pointer-events: auto;
+    }
+    #back-btn:hover {
+      color: rgba(255,255,255,0.8);
+      border-color: rgba(255,255,255,0.4);
+    }
+  </style>
+</head>
+<body>
+  <a id="back-btn" href="../../index.html">← PORTAL</a>
+  
+  <div id="canvas-container">
+    <canvas id="canvas"></canvas>
+  </div>
+  
+  <div id="ui-layer">
+    <h1>Breath of 21</h1>
+    <p>Move your cursor to step forward</p>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d', { alpha: false });
+    const uiLayer = document.getElementById('ui-layer');
+
+    let width, height;
+    let hasStarted = false;
+
+    // Entities
+    const NUM_DUST = 800;
+    const NUM_RIBBONS = 21; // 21 years
+    let dustParticles = [];
+    let ribbons = [];
+
+    // Interaction
+    let mouse = { x: -1000, y: -1000, vx: 0, vy: 0, speed: 0 };
+    let lastMouse = { x: -1000, y: -1000 };
+    let interactionPower = 0; // 0 to 1
+
+    // --- Audio System ---
+    let audioCtx;
+    let masterGain;
+    let rumbleGain;
+    let windGain;
+    let chimeGain;
+    
+    // Pentatonic scale (C Lydian/Major pentatonic feel)
+    const scale = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33, 659.25, 783.99, 880.00, 1046.50];
+
+    function initAudio() {
+      if (audioCtx) return;
+      
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      audioCtx = new AudioContext();
+      
+      masterGain = audioCtx.createGain();
+      masterGain.gain.value = 0;
+      masterGain.connect(audioCtx.destination);
+      
+      // Rumble (Chaos/Earthquake)
+      rumbleGain = audioCtx.createGain();
+      rumbleGain.gain.value = 0.5;
+      rumbleGain.connect(masterGain);
+      
+      const rumbleOsc = audioCtx.createOscillator();
+      rumbleOsc.type = 'sawtooth';
+      rumbleOsc.frequency.value = 40;
+      
+      const rumbleFilter = audioCtx.createBiquadFilter();
+      rumbleFilter.type = 'lowpass';
+      rumbleFilter.frequency.value = 100;
+      rumbleFilter.Q.value = 5;
+      
+      rumbleOsc.connect(rumbleFilter);
+      rumbleFilter.connect(rumbleGain);
+      rumbleOsc.start();
+      
+      // Wind (Breath)
+      windGain = audioCtx.createGain();
+      windGain.gain.value = 0;
+      windGain.connect(masterGain);
+      
+      const bufferSize = audioCtx.sampleRate * 2;
+      const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+      const output = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        output[i] = Math.random() * 2 - 1;
+      }
+      const windSource = audioCtx.createBufferSource();
+      windSource.buffer = noiseBuffer;
+      windSource.loop = true;
+      
+      const windFilter = audioCtx.createBiquadFilter();
+      windFilter.type = 'bandpass';
+      windFilter.frequency.value = 400; // Modulated later
+      windFilter.Q.value = 0.5;
+      
+      window.windFilter = windFilter; // Expose for modulation
+      
+      windSource.connect(windFilter);
+      windFilter.connect(windGain);
+      windSource.start();
+      
+      // Chime System
+      chimeGain = audioCtx.createGain();
+      chimeGain.gain.value = 0.3;
+      chimeGain.connect(masterGain);
+      
+      masterGain.gain.setTargetAtTime(0.8, audioCtx.currentTime, 1.0);
+    }
+
+    function playChime() {
+      if (!audioCtx) return;
+      const freq = scale[Math.floor(Math.random() * scale.length)];
+      
+      const osc = audioCtx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      
+      const env = audioCtx.createGain();
+      env.gain.value = 0;
+      
+      // Attack, decay
+      const now = audioCtx.currentTime;
+      env.gain.setValueAtTime(0, now);
+      env.gain.linearRampToValueAtTime(0.3, now + 0.05);
+      env.gain.exponentialRampToValueAtTime(0.001, now + 2.0);
+      
+      osc.connect(env);
+      env.connect(chimeGain);
+      
+      osc.start(now);
+      osc.stop(now + 2.0);
+    }
+
+    function updateAudio() {
+      if (!audioCtx) return;
+      
+      // Rumble goes down as interaction goes up
+      rumbleGain.gain.setTargetAtTime(0.4 * (1 - interactionPower), audioCtx.currentTime, 0.2);
+      
+      // Wind volume goes up with speed
+      const targetWind = Math.min(1.0, mouse.speed * 0.05);
+      windGain.gain.setTargetAtTime(targetWind, audioCtx.currentTime, 0.1);
+      
+      // Modulate wind filter frequency based on speed
+      const targetFreq = 400 + mouse.speed * 30;
+      if(window.windFilter) {
+          window.windFilter.frequency.setTargetAtTime(targetFreq, audioCtx.currentTime, 0.1);
+      }
+    }
+
+    // --- Visual System ---
+    class Dust {
+      constructor() {
+        this.x = Math.random() * width;
+        this.y = Math.random() * height;
+        this.vx = (Math.random() - 0.5) * 1;
+        this.vy = (Math.random() - 0.5) * 1;
+        this.baseSize = Math.random() * 2 + 0.5;
+        this.clarity = 0; // 0 = dark red (chaos), 1 = bright cyan (reborn)
+      }
+      
+      update() {
+        // Natural jitter (earthquake/tension)
+        this.vx += (Math.random() - 0.5) * 0.5;
+        this.vy += (Math.random() - 0.5) * 0.5;
+        
+        // Decay clarity
+        this.clarity *= 0.98;
+        
+        // Friction
+        this.vx *= 0.9;
+        this.vy *= 0.9;
+        
+        this.x += this.vx;
+        this.y += this.vy;
+        
+        if (this.x < 0) this.x = width;
+        if (this.x > width) this.x = 0;
+        if (this.y < 0) this.y = height;
+        if (this.y > height) this.y = 0;
+      }
+      
+      draw(ctx) {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.baseSize + this.clarity * 1.5, 0, Math.PI * 2);
+        
+        // Lerp color from heavy rusty red to beautiful cyan/white
+        const r = Math.floor(60 + this.clarity * 140);
+        const g = Math.floor(10 + this.clarity * 230);
+        const b = Math.floor(10 + this.clarity * 245);
+        const a = 0.5 + this.clarity * 0.5;
+        
+        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${a})`;
+        ctx.fill();
+        
+        if(this.clarity > 0.5) {
+          ctx.shadowBlur = 10 * this.clarity;
+          ctx.shadowColor = `rgba(${r}, ${g}, ${b}, ${a})`;
+        } else {
+          ctx.shadowBlur = 0;
+        }
+      }
+    }
+
+    class Ribbon {
+      constructor(index) {
+        this.index = index;
+        this.x = width / 2;
+        this.y = height / 2;
+        this.vx = 0;
+        this.vy = 0;
+        this.history = []; // Trails
+        this.length = 40 + Math.random() * 20;
+        this.offsetPhase = Math.random() * Math.PI * 2;
+      }
+      
+      update() {
+        this.offsetPhase += 0.05 + this.index * 0.001;
+        
+        if (hasStarted) {
+            // Target is mouse, but with a unique swirling offset
+            const swirlRadius = 20 + this.index * 2;
+            const targetX = mouse.x + Math.cos(this.offsetPhase) * swirlRadius;
+            const targetY = mouse.y + Math.sin(this.offsetPhase * 1.5) * swirlRadius;
+            
+            // Spring physics
+            const spring = 0.05 + (this.index / NUM_RIBBONS) * 0.05;
+            this.vx += (targetX - this.x) * spring;
+            this.vy += (targetY - this.y) * spring;
+        }
+        
+        // Friction depends on interaction
+        const friction = 0.85;
+        this.vx *= friction;
+        this.vy *= friction;
+        
+        this.x += this.vx;
+        this.y += this.vy;
+        
+        // Save history
+        this.history.unshift({ x: this.x, y: this.y });
+        if (this.history.length > this.length) {
+          this.history.pop();
+        }
+        
+        // Interact with dust
+        if (hasStarted && (Math.abs(this.vx) > 1 || Math.abs(this.vy) > 1)) {
+          for (let d of dustParticles) {
+            const dx = d.x - this.x;
+            const dy = d.y - this.y;
+            const distSq = dx * dx + dy * dy;
+            if (distSq < 4000) { // Interaction radius
+              if (d.clarity < 0.1 && Math.random() < 0.05) {
+                // Occasional sweet chime when purifying dark dust
+                playChime();
+              }
+              const dist = Math.sqrt(distSq);
+              const force = (1 - dist / 63.2) * 0.5;
+              d.vx += (this.vx * force) + (dx / dist) * force * 5;
+              d.vy += (this.vy * force) + (dy / dist) * force * 5;
+              d.clarity = Math.min(1, d.clarity + 0.3); // Purify
+            }
+          }
+        }
+      }
+      
+      draw(ctx) {
+        if (this.history.length < 2) return;
+        
+        ctx.beginPath();
+        ctx.moveTo(this.history[0].x, this.history[0].y);
+        for (let i = 1; i < this.history.length; i++) {
+          ctx.lineTo(this.history[i].x, this.history[i].y);
+        }
+        
+        const alpha = Math.min(1.0, interactionPower * 1.5);
+        ctx.strokeStyle = `rgba(200, 240, 255, ${alpha * 0.8})`;
+        ctx.lineWidth = 1.5 + (1 - this.index / NUM_RIBBONS);
+        ctx.stroke();
+      }
+    }
+
+    function resize() {
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+    }
+
+    function onPointerMove(e) {
+      if (!hasStarted) {
+        hasStarted = true;
+        uiLayer.classList.add('hidden');
+        initAudio();
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      
+      let clientX, clientY;
+      if (e.touches && e.touches.length > 0) {
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+      } else {
+        clientX = e.clientX;
+        clientY = e.clientY;
+      }
+      
+      mouse.x = clientX;
+      mouse.y = clientY;
+      
+      interactionPower = 1.0;
+    }
+
+    window.addEventListener('resize', resize);
+    window.addEventListener('mousemove', onPointerMove);
+    window.addEventListener('touchmove', onPointerMove, {passive: false});
+    window.addEventListener('mousedown', onPointerMove);
+    window.addEventListener('touchstart', onPointerMove, {passive: false});
+
+    resize();
+
+    // Init entities
+    for (let i = 0; i < NUM_DUST; i++) {
+      dustParticles.push(new Dust());
+    }
+    for (let i = 0; i < NUM_RIBBONS; i++) {
+      ribbons.push(new Ribbon(i));
+    }
+
+    function animate() {
+      // Calculate mouse speed
+      const dx = mouse.x - lastMouse.x;
+      const dy = mouse.y - lastMouse.y;
+      mouse.speed = Math.sqrt(dx*dx + dy*dy);
+      lastMouse.x = mouse.x;
+      lastMouse.y = mouse.y;
+      mouse.vx = dx;
+      mouse.vy = dy;
+      
+      if (hasStarted) {
+        interactionPower *= 0.99; // Slowly decay if mouse stops
+      }
+      
+      updateAudio();
+
+      // Clear with motion blur effect
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = `rgba(3, 1, 1, 0.2)`;
+      ctx.fillRect(0, 0, width, height);
+
+      // Draw dust
+      ctx.globalCompositeOperation = 'lighter';
+      for (let p of dustParticles) {
+        p.update();
+        p.draw(ctx);
+      }
+
+      // Draw ribbons (the 21 winds)
+      for (let r of ribbons) {
+        r.update();
+        r.draw(ctx);
+      }
+
+      requestAnimationFrame(animate);
+    }
+
+    animate();
+  </script>
+</body>
+</html>
