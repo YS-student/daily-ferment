@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Transparent Subject</title>
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #070709;
+      font-family: 'Inter', -apple-system, sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+    }
+
+    #canvas-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    #ui-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      pointer-events: none;
+      transition: opacity 3s ease-in-out;
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    .hidden {
+      opacity: 0 !important;
+    }
+
+    h1 {
+      font-weight: 200;
+      letter-spacing: 0.5em;
+      margin: 0 0 10px 0;
+      text-transform: uppercase;
+      font-size: 1.2rem;
+      text-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+    }
+
+    p {
+      font-weight: 300;
+      letter-spacing: 0.2em;
+      font-size: 0.7rem;
+      opacity: 0.4;
+      margin: 0;
+    }
+
+    #back-btn {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      z-index: 20;
+      color: rgba(255,255,255,0.2);
+      text-decoration: none;
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      transition: color 0.5s;
+      border: 1px solid rgba(255,255,255,0.05);
+      padding: 8px 16px;
+      border-radius: 4px;
+      pointer-events: auto;
+    }
+    #back-btn:hover {
+      color: rgba(255,255,255,0.6);
+      border-color: rgba(255,255,255,0.2);
+    }
+  </style>
+</head>
+<body>
+  <a id="back-btn" href="../../index.html">← PORTAL</a>
+  
+  <div id="canvas-container">
+    <canvas id="canvas"></canvas>
+  </div>
+  
+  <div id="ui-layer">
+    <h1>Transparent Subject</h1>
+    <p>Try to explain it</p>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d', { alpha: false });
+    const uiLayer = document.getElementById('ui-layer');
+
+    let width, height;
+    let hasStarted = false;
+
+    // Entities
+    const NUM_PARTICLES = 1200;
+    let particles = [];
+    
+    // Interaction
+    let mouse = { x: -1000, y: -1000, vx: 0, vy: 0, speed: 0 };
+    let lastMouse = { x: -1000, y: -1000 };
+    let restTimer = 0; // Increases when mouse is still
+    const REST_THRESHOLD = 60; // Frames before fiction fully starts
+
+    // Audio Context
+    let audioCtx;
+    let masterGain;
+    let glitchGain;
+    let ambientGain;
+    let glitchOsc, glitchLfo;
+    let ambientOscs = [];
+
+    function initAudio() {
+      if (audioCtx) return;
+      
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      audioCtx = new AudioContext();
+      
+      masterGain = audioCtx.createGain();
+      masterGain.gain.value = 0;
+      masterGain.connect(audioCtx.destination);
+      
+      // 1. Glitch/Pain synth (active when trying to "explain" / moving mouse)
+      glitchGain = audioCtx.createGain();
+      glitchGain.gain.value = 0;
+      glitchGain.connect(masterGain);
+      
+      glitchOsc = audioCtx.createOscillator();
+      glitchOsc.type = 'sawtooth';
+      glitchOsc.frequency.value = 100;
+      
+      glitchLfo = audioCtx.createOscillator();
+      glitchLfo.type = 'square';
+      glitchLfo.frequency.value = 15; // fast modulation
+      
+      const lfoGain = audioCtx.createGain();
+      lfoGain.gain.value = 500;
+      
+      glitchLfo.connect(lfoGain);
+      lfoGain.connect(glitchOsc.frequency);
+      
+      const filter = audioCtx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.value = 1000;
+      filter.Q.value = 10;
+      
+      glitchOsc.connect(filter);
+      filter.connect(glitchGain);
+      
+      glitchOsc.start();
+      glitchLfo.start();
+      
+      // 2. Ambient Drone (active when resting/letting go)
+      // Chords: Ebmaj9 feel (Eb2, G2, Bb2, D3, F3)
+      ambientGain = audioCtx.createGain();
+      ambientGain.gain.value = 0;
+      ambientGain.connect(masterGain);
+      
+      const freqs = [77.78, 98.00, 116.54, 146.83, 174.61]; 
+      freqs.forEach(freq => {
+        const osc = audioCtx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        
+        const oscGain = audioCtx.createGain();
+        oscGain.gain.value = 0.2;
+        
+        // Slow beating
+        const beatLfo = audioCtx.createOscillator();
+        beatLfo.type = 'sine';
+        beatLfo.frequency.value = 0.05 + Math.random() * 0.1;
+        const beatGain = audioCtx.createGain();
+        beatGain.gain.value = 0.1;
+        beatLfo.connect(beatGain);
+        beatGain.connect(oscGain.gain);
+        
+        osc.connect(oscGain);
+        oscGain.connect(ambientGain);
+        
+        osc.start();
+        beatLfo.start();
+        ambientOscs.push(osc);
+      });
+      
+      masterGain.gain.setTargetAtTime(1.0, audioCtx.currentTime, 2.0);
+    }
+
+    function updateAudio() {
+      if (!audioCtx) return;
+      const now = audioCtx.currentTime;
+      
+      // Glitch maps to mouse speed
+      const glitchVol = Math.min(0.5, mouse.speed * 0.02);
+      glitchGain.gain.setTargetAtTime(glitchVol, now, 0.05);
+      
+      // Ambient maps to rest
+      const restRatio = Math.min(1, restTimer / REST_THRESHOLD);
+      // Fades in beautifully when resting
+      ambientGain.gain.setTargetAtTime(restRatio * 0.8, now, 1.0);
+    }
+
+    class Particle {
+      constructor(index) {
+        this.index = index;
+        this.originX = width / 2 + (Math.random() - 0.5) * 150;
+        this.originY = height / 2 + (Math.random() - 0.5) * 150;
+        this.x = this.originX;
+        this.y = this.originY;
+        this.vx = 0;
+        this.vy = 0;
+        this.size = Math.random() * 1.5 + 0.5;
+        this.transparency = 1.0; 
+        
+        // For generative fiction movement
+        this.angle = Math.random() * Math.PI * 2;
+        this.radius = Math.random() * 300 + 50;
+        this.speed = (Math.random() > 0.5 ? 1 : -1) * (0.001 + Math.random() * 0.005);
+      }
+      
+      update() {
+        const dx = mouse.x - this.x;
+        const dy = mouse.y - this.y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        
+        // If mouse is moving fast and close, repel strongly
+        const forceRadius = 200 + mouse.speed * 10;
+        if (dist < forceRadius && mouse.speed > 1) {
+          const force = (1 - dist / forceRadius) * mouse.speed * 0.5;
+          this.vx -= (dx / dist) * force;
+          this.vy -= (dy / dist) * force;
+        }
+        
+        // Calculate velocity magnitude to determine transparency
+        const vMag = Math.sqrt(this.vx*this.vx + this.vy*this.vy);
+        
+        // Transparency drops as speed increases (becomes transparent when forced)
+        const targetTransparency = Math.max(0.02, 1.0 - vMag * 0.1);
+        this.transparency += (targetTransparency - this.transparency) * 0.1;
+        
+        if (restTimer > REST_THRESHOLD * 0.5) {
+          // Enter Fiction mode
+          const fictionRatio = Math.min(1, (restTimer - REST_THRESHOLD*0.5) / REST_THRESHOLD);
+          
+          this.angle += this.speed;
+          // Organic flow field calculation (simplified)
+          const targetX = width / 2 + Math.cos(this.angle + String(this.index).charCodeAt(0)*0.1) * this.radius * (1 + Math.sin(restTimer*0.01)*0.2);
+          const targetY = height / 2 + Math.sin(this.angle) * this.radius * 0.8;
+          
+          this.vx += (targetX - this.x) * 0.005 * fictionRatio;
+          this.vy += (targetY - this.y) * 0.005 * fictionRatio;
+        } else {
+          // Return heavily back to "origin" form if just slightly nudged
+          this.vx += (this.originX - this.x) * 0.01;
+          this.vy += (this.originY - this.y) * 0.01;
+        }
+        
+        this.vx *= 0.92; // Friction
+        this.vy *= 0.92;
+        
+        this.x += this.vx;
+        this.y += this.vy;
+      }
+      
+      draw(ctx) {
+        // Color shifts to cyan/blue in fiction mode
+        const fictionRatio = Math.min(1, restTimer / (REST_THRESHOLD * 2));
+        
+        // Base color: white/grey. Fiction: ethereal blue/purple
+        const r = Math.floor(200 - fictionRatio * 100);
+        const g = Math.floor(200 - fictionRatio * 50);
+        const b = Math.floor(220 + fictionRatio * 35);
+        
+        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${this.transparency * (0.3 + fictionRatio * 0.5)})`;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    function resize() {
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+      
+      // Re-center origins
+      for(let i=0; i<NUM_PARTICLES; i++) {
+        if(particles[i]) {
+            particles[i].originX = width / 2 + (Math.random() - 0.5) * 150;
+            particles[i].originY = height / 2 + (Math.random() - 0.5) * 150;
+        }
+      }
+    }
+
+    function onPointerMove(e) {
+      if (!hasStarted) {
+        hasStarted = true;
+        uiLayer.classList.add('hidden');
+        initAudio();
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      
+      let clientX, clientY;
+      if (e.touches && e.touches.length > 0) {
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+      } else {
+        clientX = e.clientX;
+        clientY = e.clientY;
+      }
+      
+      mouse.x = clientX;
+      mouse.y = clientY;
+    }
+
+    window.addEventListener('resize', resize);
+    window.addEventListener('mousemove', onPointerMove);
+    window.addEventListener('touchmove', onPointerMove, {passive: false});
+    window.addEventListener('mousedown', onPointerMove);
+    window.addEventListener('touchstart', onPointerMove, {passive: false});
+
+    resize();
+
+    // Init entities
+    for (let i = 0; i < NUM_PARTICLES; i++) {
+      particles.push(new Particle(i));
+    }
+
+    function animate() {
+      // Input tracking
+      const dx = mouse.x - lastMouse.x;
+      const dy = mouse.y - lastMouse.y;
+      mouse.speed = Math.sqrt(dx*dx + dy*dy);
+      
+      if (hasStarted) {
+        if (mouse.speed < 1.0) {
+           restTimer++;
+        } else {
+           restTimer -= 10;
+           if (restTimer < 0) restTimer = 0;
+        }
+        updateAudio();
+      }
+
+      lastMouse.x = mouse.x;
+      lastMouse.y = mouse.y;
+
+      // Draw Background
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = '#070709';
+      ctx.fillRect(0, 0, width, height);
+
+      // Draw 33 Earthquakes (vibrating horizontal lines)
+      ctx.lineWidth = 0.5;
+      for(let i = 0; i < 33; i++) {
+        const yPos = (height / 34) * (i + 1);
+        const jitter = (Math.random() - 0.5) * 1.5;
+        
+        ctx.beginPath();
+        ctx.moveTo(0, yPos + jitter);
+        ctx.lineTo(width, yPos + jitter);
+        ctx.strokeStyle = `rgba(150, 100, 100, ${0.05 + Math.random()*0.02})`;
+        ctx.stroke();
+      }
+
+      // Draw Particles
+      // Add slight glow when in fiction mode
+      if (restTimer > REST_THRESHOLD) {
+          ctx.globalCompositeOperation = 'lighter';
+      }
+      
+      for (let p of particles) {
+        p.update();
+        p.draw(ctx);
+      }
+
+      requestAnimationFrame(animate);
+    }
+
+    animate();
+  </script>
+</body>
+</html>
