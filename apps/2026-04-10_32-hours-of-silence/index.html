@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>32 Hours of Silence — 32時間の沈黙</title>
+<meta name="description" content="砲火が止まる32時間。ビートが止まった永遠。沈黙の中に、復活の鐘が聴こえる。">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0a0f;
+    overflow: hidden;
+    font-family: 'Inter', sans-serif;
+    cursor: crosshair;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+
+  canvas {
+    display: block;
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+  }
+
+  #ui {
+    position: fixed;
+    z-index: 10;
+    pointer-events: none;
+    width: 100%; height: 100%;
+  }
+
+  #title-overlay {
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    z-index: 20;
+    transition: opacity 2s ease;
+    pointer-events: none;
+  }
+
+  #title-overlay h1 {
+    font-size: clamp(1.5rem, 5vw, 3.5rem);
+    font-weight: 200;
+    color: rgba(255, 255, 255, 0.85);
+    letter-spacing: 0.3em;
+    margin-bottom: 0.5em;
+    text-shadow: 0 0 40px rgba(255, 200, 150, 0.3);
+  }
+
+  #title-overlay .subtitle {
+    font-size: clamp(0.7rem, 2vw, 1rem);
+    font-weight: 300;
+    color: rgba(255, 255, 255, 0.4);
+    letter-spacing: 0.15em;
+  }
+
+  #ceasefire-prompt {
+    position: fixed;
+    bottom: 12%;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    z-index: 20;
+    pointer-events: none;
+    transition: opacity 1.5s ease;
+  }
+
+  #ceasefire-prompt .prompt-text {
+    font-size: clamp(0.65rem, 1.8vw, 0.9rem);
+    font-weight: 300;
+    color: rgba(255, 255, 255, 0.3);
+    letter-spacing: 0.2em;
+    animation: pulse-prompt 3s ease-in-out infinite;
+  }
+
+  @keyframes pulse-prompt {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 0.7; }
+  }
+
+  #timer-display {
+    position: fixed;
+    top: 8%;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 2s ease;
+  }
+
+  #timer-display .time {
+    font-size: clamp(2rem, 8vw, 5rem);
+    font-weight: 200;
+    color: rgba(255, 255, 255, 0.7);
+    letter-spacing: 0.15em;
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 0 60px rgba(200, 220, 255, 0.2);
+  }
+
+  #timer-display .label {
+    font-size: clamp(0.5rem, 1.5vw, 0.75rem);
+    font-weight: 300;
+    color: rgba(255, 255, 255, 0.25);
+    letter-spacing: 0.3em;
+    text-align: center;
+    margin-top: 0.3em;
+  }
+
+  #silence-count {
+    position: fixed;
+    bottom: 5%;
+    right: 5%;
+    z-index: 20;
+    pointer-events: none;
+    font-size: clamp(0.5rem, 1.2vw, 0.65rem);
+    font-weight: 300;
+    color: rgba(255, 255, 255, 0.15);
+    letter-spacing: 0.15em;
+  }
+
+  .screen-flash {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(255, 255, 255, 0.03);
+    z-index: 5;
+    pointer-events: none;
+    animation: flash 0.8s ease-out forwards;
+  }
+
+  @keyframes flash {
+    0% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<div id="ui">
+  <div id="title-overlay">
+    <h1>32 Hours of Silence</h1>
+    <div class="subtitle">32時間の沈黙</div>
+  </div>
+
+  <div id="ceasefire-prompt">
+    <div class="prompt-text">画面をタップして停戦を発動する</div>
+  </div>
+
+  <div id="timer-display">
+    <div class="time" id="timer-text">32:00</div>
+    <div class="label">CEASEFIRE REMAINING</div>
+  </div>
+
+  <div id="silence-count">SILENCES: <span id="count-value">0</span></div>
+</div>
+
+<script>
+// ============================================================
+// 32 Hours of Silence — 32時間の沈黙
+// 停戦の沈黙をインタラクティブアートとして表現
+// ============================================================
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+// --- Audio Context ---
+let audioCtx = null;
+let noiseNode = null;
+let noiseGain = null;
+let bellNodes = [];
+let masterGain = null;
+let droneOsc = null;
+let droneGain = null;
+
+function initAudio() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  masterGain = audioCtx.createGain();
+  masterGain.gain.value = 0.4;
+  masterGain.connect(audioCtx.destination);
+
+  // War noise — brown noise
+  const bufferSize = 2 * audioCtx.sampleRate;
+  const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+  const output = noiseBuffer.getChannelData(0);
+  let lastOut = 0;
+  for (let i = 0; i < bufferSize; i++) {
+    const white = Math.random() * 2 - 1;
+    output[i] = (lastOut + (0.02 * white)) / 1.02;
+    lastOut = output[i];
+    output[i] *= 3.5;
+  }
+  noiseNode = audioCtx.createBufferSource();
+  noiseNode.buffer = noiseBuffer;
+  noiseNode.loop = true;
+  noiseGain = audioCtx.createGain();
+  noiseGain.gain.value = 0.35;
+
+  // Filter the noise — rumbling war sound
+  const noiseFilter = audioCtx.createBiquadFilter();
+  noiseFilter.type = 'lowpass';
+  noiseFilter.frequency.value = 200;
+  noiseFilter.Q.value = 1;
+
+  noiseNode.connect(noiseFilter);
+  noiseFilter.connect(noiseGain);
+  noiseGain.connect(masterGain);
+  noiseNode.start();
+}
+
+function playBell(freq, delay) {
+  if (!audioCtx) return;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  const osc2 = audioCtx.createOscillator();
+
+  osc.type = 'sine';
+  osc.frequency.value = freq;
+  osc2.type = 'sine';
+  osc2.frequency.value = freq * 2.001; // slight detuning for bell character
+
+  const gain2 = audioCtx.createGain();
+  gain2.gain.value = 0.15;
+
+  gain.gain.setValueAtTime(0, audioCtx.currentTime + delay);
+  gain.gain.linearRampToValueAtTime(0.2, audioCtx.currentTime + delay + 0.5);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + delay + 8);
+
+  gain2.gain.setValueAtTime(0, audioCtx.currentTime + delay);
+  gain2.gain.linearRampToValueAtTime(0.15, audioCtx.currentTime + delay + 0.3);
+  gain2.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + delay + 5);
+
+  osc.connect(gain);
+  osc2.connect(gain2);
+  gain.connect(masterGain);
+  gain2.connect(masterGain);
+
+  osc.start(audioCtx.currentTime + delay);
+  osc.stop(audioCtx.currentTime + delay + 10);
+  osc2.start(audioCtx.currentTime + delay);
+  osc2.stop(audioCtx.currentTime + delay + 7);
+}
+
+function startBells() {
+  // Easter bell sequence — E major / C# minor
+  const bellFreqs = [329.63, 415.30, 493.88, 659.26, 554.37, 440.00];
+  bellFreqs.forEach((f, i) => {
+    playBell(f, i * 2.5 + Math.random() * 0.5);
+  });
+}
+
+function startDrone() {
+  if (!audioCtx || droneOsc) return;
+  droneOsc = audioCtx.createOscillator();
+  droneGain = audioCtx.createGain();
+  droneOsc.type = 'sine';
+  droneOsc.frequency.value = 110; // A2
+  droneGain.gain.value = 0;
+  droneGain.gain.linearRampToValueAtTime(0.08, audioCtx.currentTime + 4);
+  droneOsc.connect(droneGain);
+  droneGain.connect(masterGain);
+  droneOsc.start();
+
+  // Add a fifth
+  const droneOsc2 = audioCtx.createOscillator();
+  const droneGain2 = audioCtx.createGain();
+  droneOsc2.type = 'sine';
+  droneOsc2.frequency.value = 164.81; // E3
+  droneGain2.gain.value = 0;
+  droneGain2.gain.linearRampToValueAtTime(0.05, audioCtx.currentTime + 6);
+  droneOsc2.connect(droneGain2);
+  droneGain2.connect(masterGain);
+  droneOsc2.start();
+}
+
+function fadeNoise(targetVolume, duration) {
+  if (!noiseGain) return;
+  noiseGain.gain.linearRampToValueAtTime(targetVolume, audioCtx.currentTime + duration);
+}
+
+// --- State ---
+const state = {
+  phase: 'war',     // 'war', 'ceasefire', 'aftermath'
+  ceasefireTimer: 0,
+  ceasefireDuration: 32, // 32 seconds
+  silenceCount: 0,
+  warmth: 0,         // accumulates per ceasefire
+  mouseX: 0,
+  mouseY: 0,
+  titleFadeStart: 0,
+  started: false,
+  lastTime: 0,
+};
+
+// --- Particles ---
+const PARTICLE_COUNT = 400;
+const particles = [];
+
+class Particle {
+  constructor() {
+    this.reset();
+    this.frozenX = 0;
+    this.frozenY = 0;
+    this.frozen = false;
+    this.glowIntensity = 0;
+  }
+
+  reset() {
+    this.x = Math.random() * canvas.width;
+    this.y = Math.random() * canvas.height;
+    this.vx = (Math.random() - 0.5) * 4;
+    this.vy = (Math.random() - 0.5) * 4;
+    this.size = Math.random() * 2.5 + 0.5;
+    this.life = Math.random();
+    this.maxLife = 0.6 + Math.random() * 0.4;
+    this.hue = 0 + Math.random() * 30;        // red-orange (war)
+    this.baseSpeed = Math.random() * 2 + 1;
+    this.trail = [];
+  }
+
+  update(dt, phase, warmth) {
+    if (phase === 'ceasefire' && !this.frozen) {
+      // Freeze
+      this.frozen = true;
+      this.frozenX = this.x;
+      this.frozenY = this.y;
+      this.glowIntensity = 0;
+    }
+
+    if (phase === 'ceasefire') {
+      // Glow up like stars
+      this.glowIntensity = Math.min(1, this.glowIntensity + dt * 0.3);
+      // Slight drift towards center (moon gravity)
+      const cx = canvas.width / 2;
+      const cy = canvas.height / 2;
+      const dx = cx - this.x;
+      const dy = cy - this.y;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      this.x += (dx / dist) * 0.15 * dt;
+      this.y += (dy / dist) * 0.15 * dt;
+      return;
+    }
+
+    this.frozen = false;
+    this.glowIntensity = Math.max(0, this.glowIntensity - dt * 0.5);
+
+    // War / Aftermath physics
+    const turbulence = phase === 'war' ? 1.0 : Math.max(0.2, 1.0 - warmth * 0.1);
+    const chaosX = (Math.random() - 0.5) * 8 * turbulence;
+    const chaosY = (Math.random() - 0.5) * 8 * turbulence;
+
+    this.vx += chaosX * dt;
+    this.vy += chaosY * dt;
+
+    // Damping
+    const damping = phase === 'aftermath' ? 0.96 : 0.98;
+    this.vx *= damping;
+    this.vy *= damping;
+
+    // Speed limit
+    const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+    const maxSpeed = phase === 'aftermath' ? 3 - warmth * 0.15 : 5;
+    if (speed > maxSpeed) {
+      this.vx = (this.vx / speed) * maxSpeed;
+      this.vy = (this.vy / speed) * maxSpeed;
+    }
+
+    this.x += this.vx;
+    this.y += this.vy;
+
+    // Store trail
+    this.trail.push({ x: this.x, y: this.y });
+    if (this.trail.length > 8) this.trail.shift();
+
+    // Wrap around
+    if (this.x < -10) this.x = canvas.width + 10;
+    if (this.x > canvas.width + 10) this.x = -10;
+    if (this.y < -10) this.y = canvas.height + 10;
+    if (this.y > canvas.height + 10) this.y = -10;
+
+    // Color shift with warmth
+    if (phase === 'aftermath') {
+      this.hue = this.hue + (200 + warmth * 20 - this.hue) * 0.005;
+    }
+  }
+
+  draw(ctx, phase, warmth) {
+    const alpha = phase === 'ceasefire'
+      ? 0.3 + this.glowIntensity * 0.7
+      : 0.3 + Math.random() * 0.3;
+
+    const hue = phase === 'ceasefire' ? 220 + Math.random() * 40 : this.hue;
+    const sat = phase === 'ceasefire' ? '30%' : '70%';
+    const light = phase === 'ceasefire'
+      ? `${60 + this.glowIntensity * 35}%`
+      : `${40 + warmth * 2}%`;
+
+    // Trail
+    if (phase !== 'ceasefire' && this.trail.length > 2) {
+      ctx.beginPath();
+      ctx.moveTo(this.trail[0].x, this.trail[0].y);
+      for (let i = 1; i < this.trail.length; i++) {
+        ctx.lineTo(this.trail[i].x, this.trail[i].y);
+      }
+      ctx.strokeStyle = `hsla(${hue}, ${sat}, ${light}, ${alpha * 0.2})`;
+      ctx.lineWidth = this.size * 0.5;
+      ctx.stroke();
+    }
+
+    // Particle
+    ctx.beginPath();
+    const drawSize = phase === 'ceasefire'
+      ? this.size * (1 + this.glowIntensity * 1.5)
+      : this.size;
+    ctx.arc(this.x, this.y, drawSize, 0, Math.PI * 2);
+    ctx.fillStyle = `hsla(${hue}, ${sat}, ${light}, ${alpha})`;
+    ctx.fill();
+
+    // Glow in ceasefire
+    if (phase === 'ceasefire' && this.glowIntensity > 0.3) {
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, drawSize * 3, 0, Math.PI * 2);
+      ctx.fillStyle = `hsla(${hue}, 20%, 80%, ${this.glowIntensity * 0.08})`;
+      ctx.fill();
+    }
+  }
+}
+
+for (let i = 0; i < PARTICLE_COUNT; i++) {
+  particles.push(new Particle());
+}
+
+// --- Shockwave effects ---
+const shockwaves = [];
+
+class Shockwave {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+    this.radius = 0;
+    this.maxRadius = Math.max(canvas.width, canvas.height) * 0.8;
+    this.life = 1;
+  }
+
+  update(dt) {
+    this.radius += dt * 300;
+    this.life -= dt * 0.4;
+  }
+
+  draw(ctx) {
+    if (this.life <= 0) return;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(200, 220, 255, ${this.life * 0.15})`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+}
+
+// --- Moon light ---
+function drawMoonlight(ctx, progress) {
+  if (progress <= 0) return;
+  const cx = canvas.width / 2;
+  const cy = canvas.height * 0.25;
+  const maxRadius = Math.min(canvas.width, canvas.height) * 0.4;
+
+  const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxRadius);
+  gradient.addColorStop(0, `rgba(220, 230, 255, ${progress * 0.08})`);
+  gradient.addColorStop(0.3, `rgba(200, 210, 240, ${progress * 0.04})`);
+  gradient.addColorStop(1, 'rgba(200, 210, 240, 0)');
+
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Moon disc
+  ctx.beginPath();
+  ctx.arc(cx, cy, 30 * progress, 0, Math.PI * 2);
+  ctx.fillStyle = `rgba(240, 245, 255, ${progress * 0.3})`;
+  ctx.fill();
+
+  // Moon glow
+  ctx.beginPath();
+  ctx.arc(cx, cy, 60 * progress, 0, Math.PI * 2);
+  ctx.fillStyle = `rgba(220, 230, 255, ${progress * 0.05})`;
+  ctx.fill();
+}
+
+// --- Random war flashes ---
+let nextFlashTime = 0;
+function warFlash(time) {
+  if (state.phase !== 'war' || time < nextFlashTime) return;
+  nextFlashTime = time + 500 + Math.random() * 2000;
+
+  // Brief flash on canvas
+  const x = Math.random() * canvas.width;
+  const y = Math.random() * canvas.height;
+  ctx.beginPath();
+  ctx.arc(x, y, 20 + Math.random() * 30, 0, Math.PI * 2);
+  ctx.fillStyle = `rgba(255, ${150 + Math.random() * 50}, ${50 + Math.random() * 50}, ${0.05 + Math.random() * 0.08})`;
+  ctx.fill();
+}
+
+// --- Resize ---
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// --- Input ---
+function handleCeasefire(x, y) {
+  initAudio();
+
+  if (!state.started) {
+    state.started = true;
+    state.titleFadeStart = performance.now();
+    document.getElementById('title-overlay').style.opacity = '0';
+    setTimeout(() => {
+      document.getElementById('title-overlay').style.display = 'none';
+    }, 2000);
+  }
+
+  if (state.phase === 'war' || state.phase === 'aftermath') {
+    // Activate ceasefire
+    state.phase = 'ceasefire';
+    state.ceasefireTimer = state.ceasefireDuration;
+    state.silenceCount++;
+    document.getElementById('count-value').textContent = state.silenceCount;
+
+    // UI
+    document.getElementById('ceasefire-prompt').style.opacity = '0';
+    document.getElementById('timer-display').style.opacity = '1';
+
+    // Audio
+    fadeNoise(0, 3);
+    setTimeout(() => startBells(), 1500);
+    setTimeout(() => startDrone(), 3000);
+
+    // Shockwave
+    shockwaves.push(new Shockwave(x, y));
+
+    // Screen flash
+    const flashEl = document.createElement('div');
+    flashEl.className = 'screen-flash';
+    document.body.appendChild(flashEl);
+    setTimeout(() => flashEl.remove(), 1000);
+  }
+}
+
+canvas.addEventListener('click', (e) => handleCeasefire(e.clientX, e.clientY));
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  const t = e.touches[0];
+  handleCeasefire(t.clientX, t.clientY);
+}, { passive: false });
+
+canvas.addEventListener('mousemove', (e) => {
+  state.mouseX = e.clientX;
+  state.mouseY = e.clientY;
+});
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  state.mouseX = e.touches[0].clientX;
+  state.mouseY = e.touches[0].clientY;
+}, { passive: false });
+
+// --- Main Loop ---
+let lastTimestamp = 0;
+function animate(timestamp) {
+  const dt = Math.min((timestamp - lastTimestamp) / 1000, 0.1);
+  lastTimestamp = timestamp;
+
+  // Background
+  const bgAlpha = state.phase === 'ceasefire' ? 0.03 : 0.08;
+  ctx.fillStyle = `rgba(10, 10, 15, ${bgAlpha})`;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Ceasefire timer
+  if (state.phase === 'ceasefire') {
+    state.ceasefireTimer -= dt;
+    const remaining = Math.max(0, state.ceasefireTimer);
+    const mins = Math.floor(remaining / 60);
+    const secs = Math.floor(remaining % 60);
+    document.getElementById('timer-text').textContent =
+      `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+    // Moon light fades in
+    const ceasefireProgress = 1 - (state.ceasefireTimer / state.ceasefireDuration);
+    drawMoonlight(ctx, Math.min(1, ceasefireProgress * 2));
+
+    if (state.ceasefireTimer <= 0) {
+      // End ceasefire
+      state.phase = 'aftermath';
+      state.warmth += 1;
+      document.getElementById('timer-display').style.opacity = '0';
+      document.getElementById('ceasefire-prompt').style.opacity = '1';
+
+      // Audio: noise returns but softer
+      const newVolume = Math.max(0.05, 0.35 - state.warmth * 0.05);
+      fadeNoise(newVolume, 4);
+
+      // Fade out drone
+      if (droneGain) {
+        droneGain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 5);
+        droneOsc = null;
+        droneGain = null;
+      }
+    }
+  }
+
+  // War flashes
+  warFlash(timestamp);
+
+  // Particles
+  for (const p of particles) {
+    p.update(dt, state.phase, state.warmth);
+    p.draw(ctx, state.phase, state.warmth);
+  }
+
+  // Shockwaves
+  for (let i = shockwaves.length - 1; i >= 0; i--) {
+    shockwaves[i].update(dt);
+    shockwaves[i].draw(ctx);
+    if (shockwaves[i].life <= 0) shockwaves.splice(i, 1);
+  }
+
+  // Mouse interaction (war phase: disturbance, aftermath: gentle attraction)
+  if (state.phase !== 'ceasefire') {
+    for (const p of particles) {
+      const dx = p.x - state.mouseX;
+      const dy = p.y - state.mouseY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 150) {
+        const force = (150 - dist) / 150;
+        if (state.phase === 'war') {
+          // Repel violently
+          p.vx += (dx / dist) * force * 3;
+          p.vy += (dy / dist) * force * 3;
+        } else {
+          // Gentle orbit in aftermath
+          p.vx += (-dy / dist) * force * 0.5;
+          p.vy += (dx / dist) * force * 0.5;
+        }
+      }
+    }
+  }
+
+  // Scan line effect (war only)
+  if (state.phase === 'war') {
+    for (let y = 0; y < canvas.height; y += 4) {
+      ctx.fillStyle = `rgba(0, 0, 0, ${0.03 + Math.random() * 0.02})`;
+      ctx.fillRect(0, y, canvas.width, 1);
+    }
+  }
+
+  // Vignette
+  const vigGrad = ctx.createRadialGradient(
+    canvas.width/2, canvas.height/2, canvas.width * 0.2,
+    canvas.width/2, canvas.height/2, canvas.width * 0.8
+  );
+  vigGrad.addColorStop(0, 'rgba(0,0,0,0)');
+  vigGrad.addColorStop(1, `rgba(0,0,0,${state.phase === 'ceasefire' ? 0.5 : 0.3})`);
+  ctx.fillStyle = vigGrad;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  requestAnimationFrame(animate);
+}
+
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>
